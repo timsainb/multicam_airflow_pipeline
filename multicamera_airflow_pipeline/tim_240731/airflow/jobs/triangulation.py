@@ -1,0 +1,2 @@
+def triangulation():
+    pass

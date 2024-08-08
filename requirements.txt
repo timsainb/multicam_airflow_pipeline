@@ -1,0 +1,17 @@
+black
+flake8
+isort
+pip
+python-dotenv
+paramiko
+numpy
+pathlib
+pandas
+requests
+scipy
+scikit-learn
+tqdm
+matplotlib
+logging
+opencv-python
+-e .
