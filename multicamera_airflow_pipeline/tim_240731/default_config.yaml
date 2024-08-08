@@ -1,2 +1,8 @@
 sync_cameras:
   trigger_pin: 2
+o2:
+  sync_cameras:
+    o2_memory: "16G"
+    o2_n_cpus: 1
+    o2_queue: "short,priority"
+    o2_runtime_multiplier: 1

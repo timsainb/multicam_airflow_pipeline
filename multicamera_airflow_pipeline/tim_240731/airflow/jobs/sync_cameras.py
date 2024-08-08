@@ -43,7 +43,7 @@ def sync_cameras(
         Path(recording_row.video_location_on_o2) / recording_row.video_recording_id
     )
     config_file = Path(config_file)
-    # config = yaml.safe_load(open(config_file, "r"))
+    config = yaml.safe_load(open(config_file, "r"))
 
     output_directory_camera_sync.mkdir(parents=True, exist_ok=True)
     current_datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -60,20 +60,24 @@ def sync_cameras(
     }
 
     # specify the duration of the job (here, it should be short)
-    duration_requested = convert_minutes_to_hms(recording_row.duration_m)
+    #  in config, set o2_runtime_multiplier to choose how long the job should
+    #  run relative to recording duration
+    duration_requested = convert_minutes_to_hms(
+        recording_row.duration_m * config["o2"]["o2_runtime_multiplier"]
+    )
 
     # create the job runner
     runner = O2Runner(
         job_name_prefix="test_submit_camera_sync",
         remote_job_directory=remote_job_directory,
         conda_env="/n/groups/datta/tim_sainburg/conda_envs/peromoseq",
-        o2_username="tis697",
+        o2_username=recording_row.username,
         o2_server="login.o2.rc.hms.harvard.edu",
         job_params=params,
-        o2_n_cpus=1,
-        o2_memory="16G",
+        o2_n_cpus=config["o2"]["o2_n_cpus"],
+        o2_memory=config["o2"]["o2_memory"],
         o2_time_limit=duration_requested,
-        o2_queue="short,priority",
+        o2_queue=config["o2"]["o2_queue"],
     )
 
     runner.python_script = textwrap.dedent(

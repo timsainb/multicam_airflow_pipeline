@@ -16,21 +16,115 @@ The first version of the pipeline is stored in multicamera_airflow_pipeline.tim_
 
 Because these steps comprise a complex dependency graph, we use Apache Airflow to manage the pipeline. Because these tasks are too computationally expensive to run on a single computer, all computations are run on the HMS data cluster O2. 
 
-### How it works
-1. Airflow is installed on a local computer. 
-2. /n/groups/datta is mounted on the local computer via `sshfs`
-3. Airflow reads which recordings to process from a [google sheet](https://docs.google.com/spreadsheets/d/1jACsUmxuJ9Une59qmvzZGc1qXezKhKzD1zho2sEfcrU/edit?gid=0#gid=0)
-4. For each recording, Airflow generates a DAG with all of the jobs it needs to run. 
-5. Jobs are submitted to o2 using `sbatch` after waiting until their dependencies are completed. 
+## How to use this code
+There are three ways you can interact with this pipeline. 
+### 1. **Run python functions directly.** 
+For example, you can run the camera synchronization function directly in python by pointing it at the video directory. This outputs a `camera_sync.csv`. 
 
-### Creating a new pipeline
-[TODO]: You can make a new folder alongside tim_240731.
+```{python}
+from multicamera_airflow_pipeline.tim_240731.sync.sync_cameras import CameraSynchronizer
+synchronizer = CameraSynchronizer(
+    recording_directory = my_video_directory, # where the video is stored
+    output_directory = output_directory_camera_sync, # directory to save the output csv
+    samplerate=150, # samplerate of video
+    trigger_pin=2, # which pin controls the camera (usually 2 or 3)
+)
+synchronizer.run()
+```
+### 2. **Run O2 jobs without Airflow.** 
+If you want to run a single step of the pipeline on O2, you can submit a job to O2 directly. Note that you need toset up SSH keys so that you can run commands on O2 before using this code to run an O2 job. For example, here is how we would run the camera sync as a direct O2 job: 
+```{python}
+from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
 
-### Setting up your own airflow
-[TODO] After installing airflow on your own computer. 
+runner = O2Runner(
+    job_name_prefix = 'test_submit_camera_sync',
+    remote_job_directory = remote_job_directory,
+    conda_env = "/n/groups/datta/tim_sainburg/conda_envs/peromoseq",
+    o2_username = "tis697",
+    o2_server="login.o2.rc.hms.harvard.edu",
+    job_params = params, 
+    o2_n_cpus = 1,
+    o2_memory="2G",
+    o2_time_limit=duration_requested,
+    o2_queue="priority",
+)
+runner.python_script = f"""
+# load params
+import yaml
+params_file = "{runner.remote_job_directory / f"{runner.job_name}.params.yaml"}"
+config_file = "{config_file.as_posix()}"
 
-- Switch airflow config setting from `SequentialExecutor` (`executor = LocalExecutor` in `airflow.cfg`) for parallelization
-- Switch to `postgresql` from `SQLite`
+params = yaml.safe_load(open(params_file, 'r'))
+config = yaml.safe_load(open(config_file, 'r'))
+    
+# grab sync cameras function
+from multicamera_airflow_pipeline.tim_240731.sync.sync_cameras import CameraSynchronizer
+synchronizer = CameraSynchronizer(
+    recording_directory=params["recording_directory"],
+    output_directory=params["output_directory_camera_sync"],
+    samplerate=params["samplerate"],  # camera sample rate
+    # trigger_pin=params["trigger_pin"],  # Which pin camera trigger was on
+    **config["sync_cameras"],
+)
+synchronizer.run()
+"""
+runner.run()
+
+runner.run() # submits the job
+```
+
+### 3. **Run O2 jobs with Airflow**. 
+This requires setting up an Airflow server which automatically maintains jobs for you. 
+
+## How Airflow works
+1. Airflow runs a local computer (my desktop).
+2. Airflow reads which recordings to process from a [google sheet](https://docs.google.com/spreadsheets/d/1jACsUmxuJ9Une59qmvzZGc1qXezKhKzD1zho2sEfcrU/edit?gid=0#gid=0)
+3. For each recording, Airflow generates a DAG with all of the `tasks` it needs to run. 
+4. `tasks` are submitted to o2 using `sbatch` after waiting until their dependencies are completed (i.e. the tasks that need to precede it)
+5. Airflow automates the process of running each step in succession, and keeps track of which tasks have run successfully, and which have failed (and how they've failed.)
+
+
+## Creating a new pipeline
+The best way to create a new pipeline is to copy a pipeline folder (e.g."tim_240731"), modify/delete steps you don't need, and add in new steps. 
+
+### Creating a new pipeline step
+New pipeline steps requires two components. 
+1. Create a python function or class to run your processing step. E.g. the `CameraSynchronizer` class in `multicamera_airflow_pipeline.tim_240731.sync.sync_cameras`.
+2. Create a an Airflow `task` to run. For example, the task for camera synchronization is located at `multicamera_airflow_pipeline.tim_240731.airflow.jobs.sync_cameras.py`. `sync_cameras` is a function that runs locally on your machine, which submits a job on o2 with `O2Runner`. These jobs are called in order by the Airflow DAG. 
+
+### Create a new DAG
+When you create a new pipeline, you need to specify the order of Airflow tasks to run. My Airflow DAG is located at `multicamera_airflow_pipeline.tim_240731.airflow.dag`
+
+The Airflow DAG is represented by a class `AirflowDAG`. Calling AirflowDAG.run() loops through each recording and generates a pipeline DAG for it. 
+
+You don't need to run `AirflowDAG.run()` yourself. Airflow automates this process by referencing it in Airflow's DAG folder (by default `~/airflow/dags`, see section below "Adding your Airflow job"). 
+
+## Setting up airflow on your local machine
+
+First, install airflow on your local computer. 
+
+```
+# create an airflow conda environment
+```
+
+You can check that the Airflow install worked with the following steps:
+
+Start the airflow scheduler in terminal (alternatively, use tmux to run these in the background):
+```
+airflow scheduler
+```
+Start the airflow web server in a separate tab or tmux
+```
+airflow webserver
+```
+Finally, navigate to `http://localhost:8080/` in your browser. 
+
+
+By default, Airflow does not allow for parallelization. To setup parallelization, we need to switch to `postgresql` from `SQLite`. 
+
+First, quit `airflow scheduler` and `airflow webserver`.
+
+Next, install `postgresql`
 
 ```
 sudo apt update
@@ -63,7 +157,7 @@ to
 ```
 sql_alchemy_conn = postgresql+psycopg2://airflow_user:airflow_pass@localhost/airflow_db
 ```
-Then create a user and password to use
+Then create a username and password to use. This username and password will allow you to login when you go to `http://localhost:8080/`.
 ```
 airflow users create \
     --role Admin \
@@ -73,6 +167,27 @@ airflow users create \
     --lastname sainburg \
     --email timsainb@gmail.com
 ```
+
+Finally, we need to switch airflow config setting from `SequentialExecutor` in `airflow.cfg` to allow for parallelization.
+
+```
+executor = LocalExecutor
+```
+
+Now airflow is parallelizable. 
+
+To test, start `airflow scheduler` and `airflow webserver` and navigate to `http://localhost:8080/`
+
+
+
+### Set up ssh keys
+To run jobs on o2, we need to SSH into `login.o2.rc.hms.harvard.edu` with python. To make this possible, we need to be able to login without entering our password interactively each time. 
+
+### Mount /n/groups/datta using sshfs
+To be able to check whether files are present, I mount `/n/groups/datta` locally using sshfs. In principle, this shouldn't be strictly necessary, but for my jobs I use sshfs to check whether files are present without having to SSH. In future updates, we will remove the need for sshfs. 
+
+Installing sshfs:
+[TODO]
 
 ##### Starting Airflow
 - To run airflow, in one terminal tab type: `airflow webserver`
