@@ -11,7 +11,14 @@ logger.info(f"Python interpreter binary location: {sys.executable}")
 
 
 class CameraSynchronizer:
-    def __init__(self, recording_directory, output_directory, samplerate, trigger_pin=2):
+    def __init__(
+        self,
+        recording_directory,
+        output_directory,
+        samplerate,
+        trigger_pin=2,
+        recompute_completed=False,
+    ):
         """
         Parameters
         ----------
@@ -32,6 +39,7 @@ class CameraSynchronizer:
         self.recording_start = datetime.strptime(
             self.recording_directory.name, "%y-%m-%d-%H-%M-%S-%f"
         )
+        self.recompute_completed = recompute_completed
 
     def check_completed(self):
         if (self.output_directory / "camera_sync.csv").exists():
@@ -104,9 +112,10 @@ class CameraSynchronizer:
     def run(self):
 
         # check if sync already completed
-        if self.check_completed():
-            logger.info("Sync already completed")
-            return
+        if self.recompute_completed == False:
+            if self.check_completed():
+                logger.info("Sync already completed")
+                return
 
         # load the config and triggerdata files
         logger.info("Loading video config, metadata, and triggerdata")

@@ -28,11 +28,11 @@ class OpenEphysSynchronizer:
     ):
 
         # csv file containing the camera sync data outputted from sync_cameras
-        self.camera_sync_file = camera_sync_file
+        self.camera_sync_file = Path(camera_sync_file)
         # the folder containing the openephys recording
-        self.ephys_recording_path = ephys_recording_path
+        self.ephys_recording_path = Path(ephys_recording_path)
         # usually base_folder/{subject}/{recording}/
-        self.ephys_sync_output_directory = ephys_sync_output_directory
+        self.ephys_sync_output_directory = Path(ephys_sync_output_directory)
 
         self.recompute_completed = recompute_completed
         self.npx_samplerate = npx_samplerate

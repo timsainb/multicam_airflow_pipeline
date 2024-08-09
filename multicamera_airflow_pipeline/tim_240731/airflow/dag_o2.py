@@ -6,9 +6,10 @@ from pathlib import Path
 from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
 from datetime import datetime
 
-from multicamera_airflow_pipeline.tim_240731.airflow.jobs import (
+from multicamera_airflow_pipeline.tim_240731.airflow.jobs.o2 import (
     sync_cameras,
     sync_cameras_to_openephys,
+    predict_2d,
     calibrate_cameras,
     spikesorting,
     triangulation,
@@ -22,6 +23,7 @@ from airflow.decorators import task
 from airflow.models.dag import DAG
 
 sync_cameras_task = task(sync_cameras.sync_cameras)
+predict_2d_task = task(predict_2d.predict_2d)
 sync_cameras_to_openephys_task = task(sync_cameras_to_openephys.sync_cameras_to_openephys)
 calibrate_cameras_task = task(calibrate_cameras.calibrate_cameras)
 spikesorting_task = task(spikesorting.spikesorting)
@@ -85,16 +87,66 @@ class AirflowDAG:
                     self.output_directory,
                     self.config_file,
                 )
-                predicted_2d = sync_cameras_to_openephys_task()
-                calibrated = calibrate_cameras_task()
-                synced_ephys = sync_cameras_to_openephys_task()
-                sorted_spikes = spikesorting_task()
-                triangulated = triangulation_task()
-                gimbaled = run_gimbal_task()
-                size_normed = size_normalization_task()
-                arena_aligned = arena_alignment_task()
-                ego_aligned = egocentric_alignment_task()
-                cont_feats = compute_continuous_features_task()
+                predicted_2d = predict_2d_task(
+                    recording_row,
+                    self.job_directory,
+                    self.output_directory,
+                    self.config_file,
+                )
+                calibrated = calibrate_cameras_task(
+                    recording_row,
+                    self.job_directory,
+                    self.output_directory,
+                    self.config_file,
+                )
+                synced_ephys = sync_cameras_to_openephys_task(
+                    recording_row,
+                    self.job_directory,
+                    self.output_directory,
+                    self.config_file,
+                )
+                sorted_spikes = spikesorting_task(
+                    recording_row,
+                    self.job_directory,
+                    self.output_directory,
+                    self.config_file,
+                )
+                triangulated = triangulation_task(
+                    recording_row,
+                    self.job_directory,
+                    self.output_directory,
+                    self.config_file,
+                )
+                gimbaled = run_gimbal_task(
+                    recording_row,
+                    self.job_directory,
+                    self.output_directory,
+                    self.config_file,
+                )
+                size_normed = size_normalization_task(
+                    recording_row,
+                    self.job_directory,
+                    self.output_directory,
+                    self.config_file,
+                )
+                arena_aligned = arena_alignment_task(
+                    recording_row,
+                    self.job_directory,
+                    self.output_directory,
+                    self.config_file,
+                )
+                ego_aligned = egocentric_alignment_task(
+                    recording_row,
+                    self.job_directory,
+                    self.output_directory,
+                    self.config_file,
+                )
+                cont_feats = compute_continuous_features_task(
+                    recording_row,
+                    self.job_directory,
+                    self.output_directory,
+                    self.config_file,
+                )
 
                 # define dependencies
                 [synced_cams, calibrated, predicted_2d] >> triangulated

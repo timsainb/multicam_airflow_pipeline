@@ -14,6 +14,7 @@ import pandas as pd
 from tqdm.auto import tqdm
 import sys
 import logging
+
 logger = logging.getLogger(__name__)
 logger.info(f"Python interpreter binary location: {sys.executable}")
 
@@ -32,10 +33,11 @@ class Calibrator:
         verbose=True,
         video_output_directory=None,
         fps=None,
+        recompute_completed=False,
     ):
-        self.calibration_video_directory = calibration_video_directory
+        self.calibration_video_directory = Path(calibration_video_directory)
         self.camera_names = camera_names
-        self.calibration_output_directory = calibration_output_directory
+        self.calibration_output_directory = Path(calibration_output_directory)
         self.sampling_method = sampling_method
         self.fps = fps
         self.verbose = verbose
@@ -44,6 +46,7 @@ class Calibrator:
         self.n_frames_to_sample = n_frames_to_sample
         self.n_jobs = n_jobs
         self.video_output_directory = video_output_directory
+        self.recompute_completed = recompute_completed
 
     def check_if_completed(self):
         # check if calibration has already been completed
@@ -82,10 +85,11 @@ class Calibrator:
 
     def run(self):
 
-        logger.info(f"Checking if calibration is already completed")
-        if self.check_if_completed():
-            return
-        
+        if self.recompute_completed == False:
+            logger.info(f"Checking if calibration is already completed")
+            if self.check_if_completed():
+                return
+
         if self.camera_names is None:
             logger.info(f"Retrieving camera names")
             # get camera names (video format should be {camera_name}.{serial}.{frame}.mp4)

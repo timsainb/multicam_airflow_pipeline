@@ -41,8 +41,8 @@ logger.info(f"Python interpreter binary location: {sys.executable}")
 class Inferencer2D:
     def __init__(
         self,
-        video_directory,  # folder containing videos
-        output_directory,  # where to save video predictions
+        recording_directory,  # folder containing videos
+        output_directory_predictions,  # where to save video predictions
         pose_estimator_config,
         pose_estimator_checkpoint,
         detector_config,
@@ -57,25 +57,27 @@ class Inferencer2D:
         use_motpy=True,
         n_motpy_tracks=3,
         use_tensorrt=False,
+        recompute_completed=False,
     ):
 
         self.n_keypoints = n_keypoints
         self.n_animals = n_animals
-        self.video_directory = video_directory
-        self.output_directory = output_directory
-        self.output_directory.mkdir(parents=True, exist_ok=True)
+        self.recording_directory = Path(recording_directory)
+        self.output_directory_predictions = Path(output_directory_predictions)
+        self.output_directory_predictions.mkdir(parents=True, exist_ok=True)
         self.detection_interval = detection_interval
         self.total_frames = total_frames
         self.use_motpy = use_motpy
         self.n_motpy_tracks = n_motpy_tracks
-        self.pose_estimator_config = pose_estimator_config
-        self.pose_estimator_checkpoint = pose_estimator_checkpoint
-        self.detector_config = detector_config
-        self.detector_checkpoint = detector_checkpoint
+        self.pose_estimator_config = Path(pose_estimator_config)
+        self.pose_estimator_checkpoint = Path(pose_estimator_checkpoint)
+        self.detector_config = Path(detector_config)
+        self.detector_checkpoint = Path(detector_checkpoint)
         self.use_tensorrt = use_tensorrt
         self.tensorrt_model_directory = Path(tensorrt_model_directory)
         self.tensorrt_rtmdetection_model_name = tensorrt_rtmdetection_model_name
         self.tensorrt_rtmpose_model_name = tensorrt_rtmpose_model_name
+        self.recompute_completed = recompute_completed
 
         # get the device
         cuda_available = torch.cuda.is_available()
@@ -110,21 +112,17 @@ class Inferencer2D:
         logger.info(f"Init completed")
 
     def check_completed(self):
-        incomplete_videos = []
-        for video_path in tqdm(self.all_videos):
-            output_h5_file = self.output_directory / f"{video_path.stem}.h5"
-            if not output_h5_file.exists():
-                incomplete_videos.append(video_path)
+        return (self.output_directory_predictions / "completed.log").exists()
 
     def load_models(self):
         self.pose_estimator = init_pose_estimator(
-            self.pose_estimator_config,
-            self.pose_estimator_checkpoint,
+            self.pose_estimator_config.as_posix(),
+            self.pose_estimator_checkpoint.as_posix(),
             device="cuda",
             cfg_options=dict(model=dict(test_cfg=dict(output_heatmaps=False))),
         )
         self.detector = init_detector(
-            self.detector_config, self.detector_checkpoint, device="cuda"
+            self.detector_config.as_posix(), self.detector_checkpoint.as_posix(), device="cuda"
         )
         self.detector.cfg = adapt_mmdet_pipeline(self.detector.cfg)
         logger.info(f"models loaded (not tensorrt)")
@@ -141,33 +139,50 @@ class Inferencer2D:
 
     def run(self):
 
+        if self.recompute_completed == False:
+            if self.check_completed():
+                logger.info(f"Video processing completed, quitting")
+                return
+            else:
+                logger.info(f"Video processing incomplete, running")
+
         if self.use_tensorrt:
             self.load_models_tensorrt()
         else:
             self.load_models()
 
-        self.all_videos = list(self.video_directory.glob("*.mp4"))
-
-        # check for completion
-        self.check_completed(self.all_videos)
+        self.all_videos = list(self.recording_directory.glob("*.mp4"))
 
         for video_path in tqdm(self.all_videos):
-            output_h5_file = self.output_directory / f"{video_path.stem}.h5"
-            if self.use_tensorrt:
-                raise NotImplementedError
-            else:
-                predict_video(
-                    video_path=video_path,
-                    output_h5_file=output_h5_file,
-                    detector=self.detector,
-                    pose_estimator=self.pose_estimator,
-                    n_keypoints=self.n_keypoints,
-                    detection_interval=self.detection_interval,
-                    n_animals=self.n_animals,
-                    use_motpy=self.use_motpy,
-                    n_motpy_tracks=self.n_motpy_tracks,
-                    use_tensorrt=self.use_tensorrt,
-                )
+
+            output_h5_file = self.output_directory_predictions / f"{video_path.stem}.h5"
+            if output_h5_file.exists() and not self.recompute_completed:
+                logger.info(f"Skipping {video_path}")
+                continue
+
+            # initially save output to temp file
+            with tempfile.NamedTemporaryFile(suffix=".h5", delete=False) as temp_h5_file:
+                temp_h5_path = temp_h5_file.name
+
+            predict_video(
+                video_path=video_path,
+                output_h5_file=temp_h5_path,
+                detector=self.detector,
+                pose_estimator=self.pose_estimator,
+                n_keypoints=self.n_keypoints,
+                detection_interval=self.detection_interval,
+                n_animals=self.n_animals,
+                use_motpy=self.use_motpy,
+                n_motpy_tracks=self.n_motpy_tracks,
+                use_tensorrt=self.use_tensorrt,
+            )
+            # when completed, move to output file
+            shutil.copy(temp_h5_path, output_h5_file)
+            os.remove(temp_h5_path)
+
+        # save a file completed.log in self.output_directory_predictions to indicate completion
+        with open(self.output_directory_predictions / "completed.log", "w") as f:
+            f.write("completed")
 
 
 def predict_video(

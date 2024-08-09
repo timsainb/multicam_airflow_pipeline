@@ -42,21 +42,8 @@ class ContinuousVariables:
         coordinates_egocentric_filename,
         coordinates_arena_filename,
         framerate,
-        recompute_completed=False,
         kpt_dict=kpt_dict,
-    ):
-        self.continuous_features_output_directory = continuous_features_output_directory
-        self.coordinates_arena_filename = coordinates_arena_filename
-        self.coordinates_egocentric_filename = coordinates_egocentric_filename
-        self.recompute_completed = recompute_completed
-        self.framerate = framerate
-        self.kpt_dict = kpt_dict
-
-    def check_completed(self):
-        return (self.continuous_features_output_directory / "continuous_features.pickle").exists()
-
-    def run(
-        self,
+        recompute_completed=False,
         speed_kernel_size_ms=150,
         acceleration_kernel_size_ms=150,
         heading_kernel_size_ms=33,
@@ -69,6 +56,31 @@ class ContinuousVariables:
         acceleration_keypoints_kernel_size_ms=150,
         wall_positions_x=[-200, 200],  # wall positions, assumes arena to be rectangular
         wall_positions_y=[-200, 200],
+    ):
+        self.continuous_features_output_directory = Path(continuous_features_output_directory)
+        self.coordinates_arena_filename = Path(coordinates_arena_filename)
+        self.coordinates_egocentric_filename = Path(coordinates_egocentric_filename)
+        self.recompute_completed = recompute_completed
+        self.framerate = framerate
+        self.kpt_dict = kpt_dict
+        self.speed_kernel_size_ms = speed_kernel_size_ms
+        self.acceleration_kernel_size_ms = acceleration_kernel_size_ms
+        self.heading_kernel_size_ms = heading_kernel_size_ms
+        self.angular_velocity_kernel_size_ms = angular_velocity_kernel_size_ms
+        self.angular_acceleration_kernel_size_ms = angular_acceleration_kernel_size_ms
+        self.spine_curvature_kernel_size_ms = spine_curvature_kernel_size_ms
+        self.limb_velocity_kernel_size_ms = limb_velocity_kernel_size_ms
+        self.limb_acceleration_kernel_size_ms = limb_acceleration_kernel_size_ms
+        self.limb_correlation_window_size_ms = limb_correlation_window_size_ms
+        self.acceleration_keypoints_kernel_size_ms = acceleration_keypoints_kernel_size_ms
+        self.wall_positions_x = wall_positions_x
+        self.wall_positions_y = wall_positions_y
+
+    def check_completed(self):
+        return (self.continuous_features_output_directory / "continuous_features.pickle").exists()
+
+    def run(
+        self,
     ):
 
         if (self.recompute_completed == False) and self.check_completed():
@@ -88,18 +100,18 @@ class ContinuousVariables:
             coordinates_arena=self.coordinates_arena,
             framerate=self.framerate,
             kpt_dict=self.kpt_dict,  # dictionary mapping keypoint names to indices
-            speed_kernel_size_ms=speed_kernel_size_ms,
-            acceleration_kernel_size_ms=acceleration_kernel_size_ms,
-            heading_kernel_size_ms=heading_kernel_size_ms,
-            angular_velocity_kernel_size_ms=angular_velocity_kernel_size_ms,
-            angular_acceleration_kernel_size_ms=angular_acceleration_kernel_size_ms,
-            spine_curvature_kernel_size_ms=spine_curvature_kernel_size_ms,
-            limb_velocity_kernel_size_ms=limb_velocity_kernel_size_ms,
-            limb_acceleration_kernel_size_ms=limb_acceleration_kernel_size_ms,
-            limb_correlation_window_size_ms=limb_correlation_window_size_ms,
-            acceleration_keypoints_kernel_size_ms=acceleration_keypoints_kernel_size_ms,
-            wall_positions_x=wall_positions_x,  # wall positions, assumes arena to be rectangular
-            wall_positions_y=wall_positions_y,
+            speed_kernel_size_ms=self.speed_kernel_size_ms,
+            acceleration_kernel_size_ms=self.acceleration_kernel_size_ms,
+            heading_kernel_size_ms=self.heading_kernel_size_ms,
+            angular_velocity_kernel_size_ms=self.angular_velocity_kernel_size_ms,
+            angular_acceleration_kernel_size_ms=self.angular_acceleration_kernel_size_ms,
+            spine_curvature_kernel_size_ms=self.spine_curvature_kernel_size_ms,
+            limb_velocity_kernel_size_ms=self.limb_velocity_kernel_size_ms,
+            limb_acceleration_kernel_size_ms=self.limb_acceleration_kernel_size_ms,
+            limb_correlation_window_size_ms=self.limb_correlation_window_size_ms,
+            acceleration_keypoints_kernel_size_ms=self.acceleration_keypoints_kernel_size_ms,
+            wall_positions_x=self.wall_positions_x,  # wall positions, assumes arena to be rectangular
+            wall_positions_y=self.wall_positions_y,
         )
 
         # save results

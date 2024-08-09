@@ -32,13 +32,12 @@ class Triangulator:
     def __init__(
         self,
         predictions_2d_directory,  # Directory where 2D predictions are stored for this video
-        output_3d_directory,  # Directory to save resulting memmap files
+        output_directory_triangulation,  # Directory to save resulting memmap files
         camera_sync_file,  # CSV file with camera sync data
         expected_frames_per_video,  # Expected number of frames per video
         camera_calibration_directory,  # Directory with calibration data in jarvis format
         n_jobs=5,  # Number of parallel jobs
         keep_top_k=3,  # Number of top keypoints to keep
-        perform_top_k_filtpring=False,  # Flag to perform top k filtering
         leave_one_out_center_threshold_mm=50,  # Threshold distance for leave-one-out center in mm
         threshold_distance_from_parent_mm=50,  # Threshold distance from parent keypoint in mm
         mmap_dtype="float32",  # Data type for memory-mapped files
@@ -46,14 +45,14 @@ class Triangulator:
         mean_filt_samples=11,  # Number of samples for mean filtering (~100ms at 120fps)
         mean_filt_distance_thresh_px=150,  # Distance threshold for mean filtering in pixels
         perform_top_k_filtering=False,
-        ignore_completed=True,  # Flag to ignore completed tasks
+        recompute_completed=False,
     ):
         """
         Triangulator class for processing 2D keypoint predictions and generating 3D positions.
 
         Parameters:
         predictions_2d_directory (str): Directory where 2D predictions are stored for this video.
-        output_3d_directory (str): Directory to save resulting memmap files.
+        output_directory_triangulation (str): Directory to save resulting memmap files.
         camera_sync_file (str): CSV file with camera sync data.
         expected_frames_per_video (int): Expected number of frames per video.
         camera_calibration_directory (str): Directory with calibration data in jarvis format.
@@ -68,10 +67,10 @@ class Triangulator:
         mean_filt_distance_thresh_px (float): Distance threshold for mean filtering in pixels. Default is 150.
         ignore_completed (bool): Flag to ignore completed tasks. Default is False.
         """
-        self.predictions_2d_directory = predictions_2d_directory
-        self.output_3d_directory = output_3d_directory
-        self.camera_sync_file = camera_sync_file
-        self.camera_calibration_directory = camera_calibration_directory
+        self.predictions_2d_directory = Path(predictions_2d_directory)
+        self.output_directory_triangulation = Path(output_directory_triangulation)
+        self.camera_sync_file = Path(camera_sync_file)
+        self.camera_calibration_directory = Path(camera_calibration_directory)
         self.expected_frames_per_video = expected_frames_per_video
         self.n_jobs = n_jobs
         self.keep_top_k = keep_top_k
@@ -82,7 +81,7 @@ class Triangulator:
         self.print_nans = print_nans
         self.mean_filt_samples = mean_filt_samples
         self.mean_filt_distance_thresh_px = mean_filt_distance_thresh_px
-        self.ignore_completed = ignore_completed
+        self.recompute_completed = recompute_completed
 
         # Initialize keypoint and skeleton information from dataset_info
         keypoint_info = dataset_info["keypoint_info"]
@@ -94,23 +93,23 @@ class Triangulator:
         self.n_keypoints = len(self.keypoints)
 
     def check_if_triangulation_exists(self):
-        # checks a log saved in output_3d_directory to see if the triangulation has already been completed
+        # checks a log saved in output_directory_triangulation to see if the triangulation has already been completed
 
-        if (self.output_3d_directory / "triangulation_completed.log").exists():
+        if (self.output_directory_triangulation / "triangulation_completed.log").exists():
             return True
         else:
             return False
 
     def save_triangulation_completed(self):
-        with open(self.output_3d_directory / "triangulation_completed.log", "w") as f:
+        with open(self.output_directory_triangulation / "triangulation_completed.log", "w") as f:
             f.write("Triangulation completed")
 
     def run(self):
 
         # check if the triangulation has already been completed
-        if self.check_if_triangulation_exists():
-            logger.info("Triangulation already exists")
-            if self.ignore_completed:
+        if self.recompute_completed:
+            if self.check_if_triangulation_exists():
+                logger.info("Triangulation already exists")
                 return
 
         # load the 2D predictions
@@ -303,7 +302,9 @@ class Triangulator:
         ax.set_xticks(range(len(self.keypoints)), self.keypoints, rotation=90)
         ax.set_yticks(range(len(self.cameras)), self.cameras)
         # save to file for chunk
-        reprojection_errors_file = self.output_3d_directory / f"reprojection_errors_{chunk_i}.jpg"
+        reprojection_errors_file = (
+            self.output_directory_triangulation / f"reprojection_errors_{chunk_i}.jpg"
+        )
         plt.savefig(reprojection_errors_file)
         plt.close()
 
@@ -312,7 +313,7 @@ class Triangulator:
         fig, ax = plt.subplots(figsize=(10, 1))
         ax.matshow(X.T - np.mean(X, axis=1).T, aspect="auto")
         triangulation_sample_file = (
-            self.output_3d_directory / f"triangulation_sample_{chunk_i}.jpg"
+            self.output_directory_triangulation / f"triangulation_sample_{chunk_i}.jpg"
         )
         plt.savefig(triangulation_sample_file)
         plt.close()
@@ -341,23 +342,23 @@ class Triangulator:
         reprojection_errors_shape_str = "x".join(map(str, reprojection_errors_shape))
 
         predictions_3d_file = (
-            self.output_3d_directory
+            self.output_directory_triangulation
             / f"predictions_3d.{keypoints_3d_dtype}.{keypoints_3d_shape_str}.mmap"
         )
         predictions_2d_file = (
-            self.output_3d_directory
+            self.output_directory_triangulation
             / f"predictions_2d.{keypoints_2d_dtype}.{keypoints_2d_shape_str}.mmap"
         )
         confidences_2d_file = (
-            self.output_3d_directory
+            self.output_directory_triangulation
             / f"confidences_2d.{confidences_2d_dtype}.{confidences_2d_shape_str}.mmap"
         )
         confidences_3d_file = (
-            self.output_3d_directory
+            self.output_directory_triangulation
             / f"confidences_3d.{confidences_3d_dtype}.{confidences_3d_shape_str}.mmap"
         )
         reprojection_errors_file = (
-            self.output_3d_directory
+            self.output_directory_triangulation
             / f"reprojection_errors.{reprojection_errors_dtype}.{reprojection_errors_shape_str}.mmap"
         )
 

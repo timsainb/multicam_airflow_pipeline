@@ -152,11 +152,10 @@ class GimbalTrainer:
 
         # set parameters
         self.samplerate = samplerate
-        self.predictions_3d_directory = predictions_3d_directory
-        self.calibration_folder = calibration_folder
-        self.gimbal_output_directory = gimbal_output_directory
+        self.predictions_3d_directory = Path(predictions_3d_directory)
+        self.calibration_folder = Path(calibration_folder)
+        self.gimbal_output_directory = Path(gimbal_output_directory)
         self.num_iters_train = num_iters_train
-        self.n_initialization_epochs = n_initialization_epochs
         self.num_states = num_states
         self.indices_egocentric = indices_egocentric
         self.max_inlier_var = max_inlier_var
@@ -177,7 +176,8 @@ class GimbalTrainer:
         self.recompute_completed = recompute_completed
         self.gimbal_params_file = self.gimbal_output_directory / "gimbal_params.p"
         self.gimbal_output_directory.mkdir(parents=True, exist_ok=True)
-        self.keypoints = default_keypoints
+        self.keypoints = keypoints
+        self.training_subsample_frames = training_subsample_frames
 
     def check_completed(self):
         return self.gimbal_params_file.exists()
@@ -224,6 +224,7 @@ class GimbalTrainer:
     def run(self):
         # skip if finished
         if self.check_completed() and (self.recompute_completed == False):
+            logger.info(f"Gimbal training already completed, skipping")
             return
 
         logger.info(f"Running gimbal training on {self.gimbal_output_directory}")

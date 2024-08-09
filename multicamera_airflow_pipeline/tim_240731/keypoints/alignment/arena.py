@@ -47,15 +47,12 @@ class ArenaAligner:
     ):
         self.batch_size = batch_size
         self.recompute_completed = recompute_completed
-        self.predictions_3d_file = predictions_3d_file
+        self.predictions_3d_file = Path(predictions_3d_file)
         self.arena_alignment_output_directory = Path(arena_alignment_output_directory)
         self.plot_steps = plot_steps
 
     def check_completed(self):
-        if len(list(self.arena_alignment_output_directory.glob("completed.txt"))) > 0:
-            return True
-        else:
-            return False
+        return (self.arena_alignment_output_directory / "completed.txt").exists()
 
     def run(self):
 

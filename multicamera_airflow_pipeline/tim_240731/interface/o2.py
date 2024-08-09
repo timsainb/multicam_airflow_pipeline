@@ -42,6 +42,9 @@ class O2Runner:
         o2_memory="16G",
         o2_time_limit="4:00:00",
         o2_queue="short",
+        o2_exclude=None,  # "compute-g-16-175,compute-g-16-176,compute-g-16-177,compute-g-16-194,compute-g-16-197"
+        o2_qos=None,  # "gpuquad_qos"
+        o2_gres=None,  # "gpu:1"
     ):
         self.job_name_prefix = job_name_prefix
         self.remote_job_directory = Path(remote_job_directory)
@@ -53,6 +56,9 @@ class O2Runner:
         self.o2_server = o2_server
         self.conda_env = conda_env
         self.job_params = job_params
+        self.o2_exclude = o2_exclude
+        self.o2_qos = o2_qos
+        self.o2_gres = o2_gres
 
         # determine a job id as the current timestamp
         self.job_datetime = datetime.now()
@@ -97,7 +103,12 @@ class O2Runner:
         slurm_script += f"#SBATCH --mem={self.o2_memory}\n"
         slurm_script += f"#SBATCH --time={self.o2_time_limit}\n"
         slurm_script += f"#SBATCH --output={self.output_log}\n\n"
-        # TODO: GPU support
+        if self.o2_exclude is not None:
+            slurm_script += f"#SBATCH --exclude={self.o2_exclude}\n"
+        if self.o2_qos is not None:
+            slurm_script += f"#SBATCH --qos={self.o2_qos}\n"
+        if self.o2_gres is not None:
+            slurm_script += f"#SBATCH --gres={self.o2_gres}\n"
         slurm_script += f"# Load the required modules\n"
         slurm_script += f"module load gcc/9.2.0\n\n"
         slurm_script += f"source activate {self.conda_env}\n\n"

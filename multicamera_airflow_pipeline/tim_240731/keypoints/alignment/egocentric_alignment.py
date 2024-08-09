@@ -54,7 +54,7 @@ class EgocentricAligner:
         self.plot_steps = plot_steps
 
         logger.info(f"Output directory: {self.egocentric_alignment_output_directory}")
-        egocentric_alignment_output_directory.mkdir(parents=True, exist_ok=True)
+        self.egocentric_alignment_output_directory.mkdir(parents=True, exist_ok=True)
 
         if alignment_method not in ["rigid", "nonrigid"]:
             raise ValueError("alignment_method must be 'rigid' or 'nonrigid'")
@@ -62,10 +62,7 @@ class EgocentricAligner:
         self.recompute_completed = recompute_completed
 
     def check_completed(self):
-        if len(list(self.egocentric_alignment_output_directory.glob("completed.txt"))) > 0:
-            return True
-        else:
-            return False
+        return (self.egocentric_alignment_output_directory / "completed.txt").exists()
 
     def run(self):
         logger.info(f"Running alignment method: {self.alignment_method}")

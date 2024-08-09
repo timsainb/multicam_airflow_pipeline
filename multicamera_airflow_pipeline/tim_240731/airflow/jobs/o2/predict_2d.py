@@ -10,6 +10,10 @@ import inspect
 import time
 import yaml
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def convert_minutes_to_hms(minutes_float):
     # Convert minutes to total seconds
@@ -23,61 +27,65 @@ def convert_minutes_to_hms(minutes_float):
     return f"{hours:02}:{minutes:02}:{seconds:02}"
 
 
-def sync_cameras(
+def check_2d_completion(output_directory_predictions):
+    return (output_directory_predictions / "completed.log").exists()
+
+
+def predict_2d(
     recording_row,
     job_directory,
     output_directory,
     config_file,
 ):
-    # where to save output
-    output_directory_camera_sync = (
-        output_directory / "camera_sync" / recording_row.video_recording_id
-    )
-
-    # check if sync is already completed
-    if check_camera_sync_completion(output_directory_camera_sync):
-        return
+    # load config
+    config_file = Path(config_file)
+    config = yaml.safe_load(open(config_file, "r"))
 
     # where the video data is located
     recording_directory = (
         Path(recording_row.video_location_on_o2) / recording_row.video_recording_id
     )
-    config_file = Path(config_file)
-    config = yaml.safe_load(open(config_file, "r"))
 
-    output_directory_camera_sync.mkdir(parents=True, exist_ok=True)
+    # where to save output
+    output_directory_predictions = (
+        output_directory / "2D_predictions" / recording_row.video_recording_id
+    )
+    output_directory_predictions.mkdir(parents=True, exist_ok=True)
     current_datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     remote_job_directory = job_directory / current_datetime_str
 
-    # get camera info
-    samplerate = recording_row.samplerate
-    # trigger_pin = recording_row.trigzger_pin
+    # check if sync successfully completed
+    if config["prediction_2d"]["recompute_completed"] == False:
+        if check_2d_completion(output_directory_predictions):
+            logger.info("2d prediction completed, quitting")
+            return
+        else:
+            logger.info("2d prediction incomplete, starting")
+
     params = {
         "recording_directory": recording_directory.as_posix(),
-        "output_directory_camera_sync": output_directory_camera_sync.as_posix(),
-        "samplerate": samplerate,
-        # "trigger_pin": trigger_pin,
+        "output_directory_predictions": output_directory_predictions.as_posix(),
     }
 
-    # specify the duration of the job (here, it should be short)
-    #  in config, set o2_runtime_multiplier to choose how long the job should
-    #  run relative to recording duration
     duration_requested = convert_minutes_to_hms(
-        recording_row.duration_m * config["o2"]["o2_runtime_multiplier"]
+        recording_row.duration_m * config["o2"]["prediction_2d"]["o2_runtime_multiplier"]
     )
 
     # create the job runner
     runner = O2Runner(
-        job_name_prefix="test_submit_camera_sync",
+        job_name_prefix=f"{recording_row.video_recording_id}_2d_predictions",
         remote_job_directory=remote_job_directory,
-        conda_env="/n/groups/datta/tim_sainburg/conda_envs/peromoseq",
+        conda_env="/n/groups/datta/tim_sainburg/conda_envs/mmdeploy",
         o2_username=recording_row.username,
         o2_server="login.o2.rc.hms.harvard.edu",
         job_params=params,
-        o2_n_cpus=config["o2"]["o2_n_cpus"],
-        o2_memory=config["o2"]["o2_memory"],
+        o2_n_cpus=config["o2"]["prediction_2d"]["o2_n_cpus"],
+        o2_memory=config["o2"]["prediction_2d"]["o2_memory"],
         o2_time_limit=duration_requested,
-        o2_queue=config["o2"]["o2_queue"],
+        o2_queue=config["o2"]["prediction_2d"]["o2_queue"],
+        o2_exclude=config["o2"]["prediction_2d"]["o2_exclude"],
+        o2_qos=config["o2"]["prediction_2d"]["o2_qos"],
+        o2_gres=config["o2"]["prediction_2d"]["o2_gres"],
     )
 
     runner.python_script = textwrap.dedent(
@@ -89,19 +97,20 @@ def sync_cameras(
 
     params = yaml.safe_load(open(params_file, 'r'))
     config = yaml.safe_load(open(config_file, 'r'))
-        
+
     # grab sync cameras function
-    from multicamera_airflow_pipeline.tim_240731.sync.sync_cameras import CameraSynchronizer
-    synchronizer = CameraSynchronizer(
-        recording_directory=params["recording_directory"],
-        output_directory=params["output_directory_camera_sync"],
-        samplerate=params["samplerate"],  # camera sample rate
-        # trigger_pin=params["trigger_pin"],  # Which pin camera trigger was on
-        **config["sync_cameras"],
+    from multicamera_airflow_pipeline.tim_240731.keypoints.predict_2D import Inferencer2D
+    camera_calibrator = Inferencer2D(
+        recording_directory = params["recording_directory"],
+        output_directory_predictions = params["output_directory_predictions"],
+        **config["prediction_2d"]
     )
-    synchronizer.run()
+    camera_calibrator.run()
     """
     )
+
+    print(runner.python_script)
+
     runner.run()
 
     # wait until the job is finished
@@ -114,13 +123,7 @@ def sync_cameras(
         time.sleep(60)
 
     # check if sync successfully completed
-    if check_camera_sync_completion(output_directory_camera_sync) == False:
-        raise ValueError("Camera sync did not complete successfully.")
-
-
-def check_camera_sync_completion(output_directory):
-    output_directory = Path(output_directory)
-    if (output_directory / "camera_sync.csv").exists():
-        return True
+    if check_2d_completion(output_directory_predictions):
+        logger.info("2D prediction completed successfully")
     else:
-        return False
+        raise ValueError("2D prediction did not complete successfully.")

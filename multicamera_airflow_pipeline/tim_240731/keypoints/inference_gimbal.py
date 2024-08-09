@@ -96,12 +96,6 @@ class GimbalInferencer:
         pos_dt_variance=1,
         num_leapfrog_steps=5,
         step_size=0.1,
-        plot_skeleton_distances=False,
-        plot_triangulation_error=False,
-        plot_joint_directions=False,
-        plot_fit_likelihood=False,
-        plot_inference_likelihood=False,
-        remove_samples_with_nans=False,
         conf_sigmoid_gain=20,
         conf_sigmoid_center=0.1,
         batch_size=200000,
@@ -125,12 +119,6 @@ class GimbalInferencer:
         self.pos_dt_variance = pos_dt_variance
         self.num_leapfrog_steps = num_leapfrog_steps
         self.step_size = step_size
-        self.plot_skeleton_distances = plot_skeleton_distances
-        self.plot_triangulation_error = plot_triangulation_error
-        self.plot_joint_directions = plot_joint_directions
-        self.plot_fit_likelihood = plot_fit_likelihood
-        self.plot_inference_likelihood = plot_inference_likelihood
-        self.remove_samples_with_nans = remove_samples_with_nans
         self.conf_sigmoid_gain = conf_sigmoid_gain
         self.conf_sigmoid_center = conf_sigmoid_center
         self.batch_size = batch_size
@@ -142,7 +130,7 @@ class GimbalInferencer:
         if self.testing:
             logger.warning("Testing mode is on. Only running on first 10k samples.")
 
-        self.gimbal_params_file = gimbal_output_directory / "gimbal_params.p"
+        self.gimbal_params_file = Path(gimbal_output_directory) / "gimbal_params.p"
 
         if self.gimbal_params_file.exists() == False:
             raise FileNotFoundError(

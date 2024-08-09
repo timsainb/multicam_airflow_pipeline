@@ -214,4 +214,9 @@ airflow_dag.run()
 ```
 
 ### TODO all
+- Get O2 version of tensorrt working...
+- create fully local DAG
+    - or, create DAG that utilizes local & o2 simultaneously?
+- add longwood cluster to DAG
 - estimate unit locations (?)
+- update egocentric alignment, and any other scripts that write directly to memmap, rather than putting memmap in temp and copying when finished

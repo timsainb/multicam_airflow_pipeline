@@ -76,11 +76,13 @@ class SizeNormalizer:
         return (self.size_norm_output_directory / "completed.log").exists()
 
     def run(self):
+
         # skip if completed
         if self.check_completed() & (self.recompute_completed == False):
             logger.info(f"Size normalization already completed, skipping")
             return
 
+        logger.info(f"Starting size normalization")
         self.load_predictions_3d()
         self.initialize_output_folder()
 
@@ -155,6 +157,9 @@ class SizeNormalizer:
 
         self.size_norm_mmap[:] = recomputed_keypoints
         self.size_norm_mmap_angles[:] = recomputed_angles
+
+        # mark as completed
+        (self.size_norm_output_directory / "completed.log").touch()
 
     def initialize_output_folder(self):
 
@@ -548,7 +553,9 @@ def calculate_joint_angles_parallel(
         samples_to_calculate = range(kpts[root_joint].shape[0])
 
     # Parallel computation
-    results = Parallel(n_jobs=n_jobs)(
+
+    # results = Parallel(n_jobs=n_jobs)(
+    results = Parallel(n_jobs=1)(
         delayed(calculate_frame_joint_angles)(
             joints=kpts["joints"],
             hierarchy=kpts["hierarchy"],
