@@ -119,16 +119,30 @@ prediction_2d:
   pose_estimator_checkpoint: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-05-04-21-35-13_305524/best_PCK_epoch_200.pth"
   detector_config: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmdet/rtmdet_tiny_8xb32-300e_coco_chronic_24-05-04-17-51-58_216661/config.py"
   detector_checkpoint: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmdet/rtmdet_tiny_8xb32-300e_coco_chronic_24-05-04-17-51-58_216661/epoch_400.pth"
-  tensorrt_model_directory: ""
-  tensorrt_rtmdetection_model_name: ""
-  tensorrt_rtmpose_model_name: ""
+  tensorrt_rtmpose_model_name : 'rtmpose-m_8xb64-210e_ap10k-256x256_24-05-04-21-35-13_305524'
+  tensorrt_rtmdetection_model_name : 'rtmdet_tiny_8xb32-300e_coco_chronic_24-05-04-17-51-58_216661'
   n_keypoints : 25
   n_animals : 1
   detection_interval : 1
   use_motpy : True
   n_motpy_tracks : 3
-  use_tensorrt : False
+  use_tensorrt : True
   recompute_completed : False
+
+tensorrt_conversion:
+  path_to_rmpose_config: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-05-04-21-35-13_305524/config.py"
+  path_to_rmpose_checkpoint: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-05-04-21-35-13_305524/best_PCK_epoch_200.pth"
+  path_to_rtmdetection_config: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmdet/rtmdet_tiny_8xb32-300e_coco_chronic_24-05-04-17-51-58_216661/config.py"
+  path_to_rtmdetection_checkpoint: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmdet/rtmdet_tiny_8xb32-300e_coco_chronic_24-05-04-17-51-58_216661/epoch_400.pth"
+  rtmdetection_model_name: "rtmdet_tiny_8xb32-300e_coco_chronic_24-05-04-17-51-58_216661"
+  rtmpose_model_name: "rtmpose-m_8xb64-210e_ap10k-256x256_24-05-04-21-35-13_305524"
+  skeleton_py_file: "/n/groups/datta/tim_sainburg/projects/multicamera_airflow_pipeline/multicamera_airflow_pipeline/tim_240731/skeletons/sainburg25pt.py"
+  conda_env: "/n/groups/datta/tim_sainburg/conda_envs/mmdeploy"
+  path_to_mmdeploy: "/n/groups/datta/tim_sainburg/projects/mmdeploy/"
+  path_to_demo_image_detection: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/example_data/test_mouse.png"
+  path_to_demo_image_pose: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/example_data/test_mouse_cropped.png"
+  path_to_mmdetection_config: "/n/groups/datta/tim_sainburg/projects/mmdeploy/configs/mmdet/detection/detection_tensorrt_static-320x320.py"
+  path_to_mmpose_config: "/n/groups/datta/tim_sainburg/projects/mmdeploy/configs/mmpose/pose-detection_simcc_tensorrt_dynamic-256x256.py"
 
 o2:
   sync_cameras:
@@ -152,6 +166,15 @@ o2:
   prediction_2d:
     o2_memory: "64G"
     o2_n_cpus: 20
+    o2_queue: "gpu_quad,gpu"
+    o2_runtime_multiplier: 20
+    o2_exclude: "compute-g-16-175,compute-g-16-176,compute-g-16-177,compute-g-16-194,compute-g-16-197"
+    o2_qos: "gpuquad_qos"
+    o2_gres: "gpu:1"
+
+  prediction_2d_tensorrt:
+    o2_memory: "64G"
+    o2_n_cpus: 6
     o2_queue: "gpu_quad,gpu"
     o2_runtime_multiplier: 20
     o2_exclude: "compute-g-16-175,compute-g-16-176,compute-g-16-177,compute-g-16-194,compute-g-16-197"

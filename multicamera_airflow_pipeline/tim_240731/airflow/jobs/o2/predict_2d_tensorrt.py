@@ -1,3 +1,4 @@
+# UNUSED: THIS FILE CAN BE SAFELY DELETED
 from datetime import datetime, timedelta
 import pandas as pd
 import requests
@@ -112,7 +113,6 @@ def predict_2d(
             tensorrt_output_directory = params["tensorrt_model_directory"],
             **config["tensorrt_conversion"]
         )
-        model_converter.run()
 
         # grab sync cameras function
         from multicamera_airflow_pipeline.tim_240731.keypoints.predict_2D import Inferencer2D

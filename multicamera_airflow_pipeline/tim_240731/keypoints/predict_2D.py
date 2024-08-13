@@ -53,7 +53,7 @@ class Inferencer2D:
         n_keypoints=25,
         n_animals=1,
         detection_interval=1,
-        total_frames=None,
+        expected_video_length_frames=None,
         use_motpy=True,
         n_motpy_tracks=3,
         use_tensorrt=False,
@@ -66,7 +66,7 @@ class Inferencer2D:
         self.output_directory_predictions = Path(output_directory_predictions)
         self.output_directory_predictions.mkdir(parents=True, exist_ok=True)
         self.detection_interval = detection_interval
-        self.total_frames = total_frames
+        self.expected_video_length_frames = expected_video_length_frames
         self.use_motpy = use_motpy
         self.n_motpy_tracks = n_motpy_tracks
         self.pose_estimator_config = Path(pose_estimator_config)
@@ -102,6 +102,7 @@ class Inferencer2D:
             assert (self.tensorrt_detection_model_path / "output_tensorrt.jpg").exists()
             assert (self.tensorrt_pose_estimator_path / "output_tensorrt.jpg").exists()
             # load runtime models
+            import tensorrt
             from mmdeploy_runtime import Detector, PoseDetector
 
             self.Detector = Detector
@@ -153,11 +154,11 @@ class Inferencer2D:
 
         self.all_videos = list(self.recording_directory.glob("*.mp4"))
 
-        for video_path in tqdm(self.all_videos):
+        for video_path in tqdm(self.all_videos, desc="videos"):
 
             output_h5_file = self.output_directory_predictions / f"{video_path.stem}.h5"
             if output_h5_file.exists() and not self.recompute_completed:
-                logger.info(f"Skipping {video_path}")
+                logger.info(f"Completed, skipping {video_path}")
                 continue
 
             # initially save output to temp file
@@ -175,6 +176,7 @@ class Inferencer2D:
                 use_motpy=self.use_motpy,
                 n_motpy_tracks=self.n_motpy_tracks,
                 use_tensorrt=self.use_tensorrt,
+                total_frames=self.expected_video_length_frames,
             )
             # when completed, move to output file
             shutil.copy(temp_h5_path, output_h5_file)
@@ -236,7 +238,7 @@ def predict_video(
         assert n_motpy_tracks >= n_animals
 
     n_frames = 0
-    for frame_id in tqdm(range(total_frames), leave=False):
+    for frame_id in tqdm(range(total_frames), leave=False, desc="frames"):
         success, frame = video.read()
         if not success:
             break
@@ -244,8 +246,9 @@ def predict_video(
         # apply detector
         if frame_id % detection_interval == 0:
             if use_tensorrt:
-                raise NotImplementedError
-                bboxes, labels, _ = detector(frame)
+                bboxes, _, _ = detector(frame)
+                conf = bboxes[:n_motpy_tracks, 4]
+                bboxes = bboxes[:n_motpy_tracks, :4]
             else:
                 result = inference_detector(detector, frame)
                 bboxes = result.pred_instances["bboxes"][:n_motpy_tracks].cpu().numpy()

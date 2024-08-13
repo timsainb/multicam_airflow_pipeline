@@ -88,6 +88,9 @@ def triangulation(
         / "CalibrationParameters"
     )
 
+    # if the calibration completed successfully, the camera calibration directory should exist
+    assert camera_calibration_directory.exists()
+
     params = {
         "predictions_2d_directory": predictions_2d_directory.as_posix(),
         "output_directory_triangulation": output_directory_triangulation.as_posix(),

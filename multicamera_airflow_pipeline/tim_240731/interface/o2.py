@@ -45,6 +45,7 @@ class O2Runner:
         o2_exclude=None,  # "compute-g-16-175,compute-g-16-176,compute-g-16-177,compute-g-16-194,compute-g-16-197"
         o2_qos=None,  # "gpuquad_qos"
         o2_gres=None,  # "gpu:1"
+        do_not_submit=False,
     ):
         self.job_name_prefix = job_name_prefix
         self.remote_job_directory = Path(remote_job_directory)
@@ -59,6 +60,7 @@ class O2Runner:
         self.o2_exclude = o2_exclude
         self.o2_qos = o2_qos
         self.o2_gres = o2_gres
+        self.do_not_submit = do_not_submit  # don't actually submit
 
         # determine a job id as the current timestamp
         self.job_datetime = datetime.now()
@@ -93,7 +95,10 @@ class O2Runner:
         self.write_params_file()
         # submit the job
         logger.info(f"Submitting job: {self.job_name}")
-        self.submit()
+        if self.do_not_submit:
+            logger.info("do_not_submit is True, not submitting job.")
+        else:
+            self.submit()
 
     def write_slurm_script(self):
         slurm_script = f"#!/usr/bin/env bash\n"
@@ -258,6 +263,9 @@ class O2Runner:
             logger.info("The job failed.")
             raise Exception("Job failed.")
         elif job_state == "CANCELLED":
+            logger.info("The job was cancelled.")
+            raise Exception("Job failed.")
+        elif job_state == "CANCELLED+":
             logger.info("The job was cancelled.")
             raise Exception("Job failed.")
         elif job_state == "TIMEOUT":

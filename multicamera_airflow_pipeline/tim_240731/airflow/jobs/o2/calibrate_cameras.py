@@ -39,7 +39,7 @@ def calibrate_cameras(
 
     # where to save output
     output_directory_camera_calibration = (
-        output_directory / "camera_calibration" / recording_row.video_recording_id
+        output_directory / "camera_calibration" / recording_row.calibration_id
     )
     output_directory_camera_calibration.mkdir(parents=True, exist_ok=True)
     current_datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")

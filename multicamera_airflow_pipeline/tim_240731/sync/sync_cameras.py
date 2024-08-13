@@ -93,21 +93,21 @@ class CameraSynchronizer:
         )
         self.cameras = self.metadata_csvs_df.camera.unique()
 
-    def save_synced_data(self):
-
-        self.output_directory.parent.mkdir(parents=True, exist_ok=True)
-
-        # save the frame_df
-        self.frame_df.to_csv(self.output_directory / "frame_df.csv")
-
-        # save the metadata_csvs_df
-        # self.metadata_csvs_df.to_csv(
-        #    self.output_directory / "metadata_csvs_df.csv", index=False
-        # )
-
-        # save the config
-        # with open(self.output_directory / "config.yaml", "w") as file:
-        #    yaml.dump(self.config, file)
+    # def save_synced_data(self):
+    #
+    #    self.output_directory.parent.mkdir(parents=True, exist_ok=True)
+    #
+    #    # save the frame_df
+    #    self.frame_df.to_csv(self.output_directory / "frame_df.csv")
+    #
+    #    # save the metadata_csvs_df
+    #    # self.metadata_csvs_df.to_csv(
+    #    #    self.output_directory / "metadata_csvs_df.csv", index=False
+    #    # )
+    #
+    #    # save the config
+    #    # with open(self.output_directory / "config.yaml", "w") as file:
+    #    #    yaml.dump(self.config, file)
 
     def run(self):
 

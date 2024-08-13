@@ -41,6 +41,7 @@ def sync_cameras(
     output_directory_camera_sync = (
         output_directory / "camera_sync" / recording_row.video_recording_id
     )
+    logger.info("Starting sync cameras job")
 
     # check if sync is already completed
     if config["sync_cameras"]["recompute_completed"]:
@@ -130,8 +131,4 @@ def sync_cameras(
 
 
 def check_camera_sync_completion(output_directory):
-    output_directory = Path(output_directory)
-    if (output_directory / "camera_sync.csv").exists():
-        return True
-    else:
-        return False
+    return (output_directory / "camera_sync.csv").exists()
