@@ -22,13 +22,15 @@ import jax.numpy as jnp
 import jax.random as jr
 import multicam_calibration as mcc
 from scipy.signal import medfilt
+import tempfile
+import shutil
 
 jax.config.update("jax_enable_x64", False)
 from tensorflow_probability.substrates.jax.distributions import VonMisesFisher as VMF
 from gimbal.fit import em_step
 from jax import lax, jit
 import logging
-
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 from jax.lib import xla_bridge
 
@@ -178,21 +180,32 @@ class GimbalInferencer:
         self.n_keypoints = len(self.use_bodyparts)
         self.n_batches = int(np.ceil(self.total_samples / self.batch_size))
 
-        # initialize output mmaps
-        self.initialize_output()
+        # Create a temporary directory
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            # Convert the temporary directory path to a Path object
+            tmpdir_path = Path(tmpdirname)
+            # initialize output mmaps
+            temp_gimbal_file, temp_gimbal_success_file = self.initialize_output(tmpdir_path)
 
-        # save the gimbal keypoints order
-        keypoints_order_gimbal = np.array([self.use_bodyparts[i] for i in self.node_order])
-        np.save(
-            self.gimbal_output_directory / "keypoints_order_gimbal.npy",
-            keypoints_order_gimbal,
-        )
+            # save the gimbal keypoints order
+            keypoints_order_gimbal = np.array([self.use_bodyparts[i] for i in self.node_order])
+            np.save(
+                self.gimbal_output_directory / "keypoints_order_gimbal.npy",
+                keypoints_order_gimbal,
+            )
 
-        self.gimbal_kpt_indices = np.array([self.kpt_dict[i] for i in keypoints_order_gimbal])
+            self.gimbal_kpt_indices = np.array([self.kpt_dict[i] for i in keypoints_order_gimbal])
 
-        # run inference for each batch
-        for batch in tqdm(range(self.n_batches), desc="batch"):
-            self.infer_batch(batch)
+            # run inference for each batch
+            for batch in tqdm(range(self.n_batches), desc="batch"):
+                self.infer_batch(batch)
+
+            # move from tmpdir_path to self.gimbal_output_directory
+            shutil.move(temp_gimbal_file, self.gimbal_output_directory / temp_gimbal_file.name)
+            shutil.move(
+                temp_gimbal_success_file,
+                self.gimbal_output_directory / temp_gimbal_success_file.name,
+            )
 
         # create a log file to indicate completion
         with open(self.gimbal_output_directory / "completed.log", "w") as f:
@@ -348,7 +361,7 @@ class GimbalInferencer:
             ]
             self.gimbal_success[batch_start:batch_end] = 1
 
-    def initialize_output(self):
+    def initialize_output(self, tmpdir_path):
 
         self.gimbal_output_directory.mkdir(exist_ok=True, parents=True)
         # initialize output
@@ -357,10 +370,7 @@ class GimbalInferencer:
         keypoints_3d_dtype = mmap_dtype
         keypoints_3d_shape_str = "x".join(map(str, keypoints_3d_shape))
 
-        gimbal_file = (
-            self.gimbal_output_directory
-            / f"gimbal.{keypoints_3d_dtype}.{keypoints_3d_shape_str}.mmap"
-        )
+        gimbal_file = tmpdir_path / f"gimbal.{keypoints_3d_dtype}.{keypoints_3d_shape_str}.mmap"
 
         self.gimbal_output = np.memmap(
             gimbal_file,
@@ -372,9 +382,7 @@ class GimbalInferencer:
         gimbal_success_shape = (self.total_samples, 1)
         gimbal_success_str = "x".join(map(str, gimbal_success_shape))
 
-        gimbal_success_file = (
-            self.gimbal_output_directory / f"gimbal_success.bool.{gimbal_success_str}.mmap"
-        )
+        gimbal_success_file = tmpdir_path / f"gimbal_success.bool.{gimbal_success_str}.mmap"
         self.gimbal_success = np.memmap(
             gimbal_success_file,
             dtype="bool",
@@ -390,6 +398,8 @@ class GimbalInferencer:
                 self.predictions_3D_mmap[batch_start:batch_end]
             )
             self.gimbal_success[batch_start:batch_end] = 0
+
+        return gimbal_file, gimbal_success_file
 
     def load_calibration_data(self):
         self.all_extrinsics, self.all_intrinsics, self.camera_names = mcc.load_calibration(

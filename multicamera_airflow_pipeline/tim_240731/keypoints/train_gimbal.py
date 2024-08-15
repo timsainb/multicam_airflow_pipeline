@@ -27,7 +27,7 @@ from tensorflow_probability.substrates.jax.distributions import VonMisesFisher a
 from gimbal.fit import em_step
 from jax import lax, jit
 import logging
-
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 from jax.lib import xla_bridge
 

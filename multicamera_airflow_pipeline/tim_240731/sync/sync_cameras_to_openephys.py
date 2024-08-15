@@ -9,7 +9,10 @@ import spikeinterface.extractors as se
 from datetime import datetime, timedelta
 import logging
 import sys
-
+import tempfile
+import shutil
+import re
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.info(f"Python interpreter binary location: {sys.executable}")
 
@@ -132,8 +135,10 @@ class OpenEphysSynchronizer:
 
         logger.info(f"Syncing {stream_name}")
 
+        stream_alphanumeric = re.sub(r"\W+", "-", stream_name)
+
         # create directory for each stream
-        (self.ephys_sync_output_directory / stream_name).mkdir(exist_ok=True, parents=True)
+        (self.ephys_sync_output_directory / stream_alphanumeric).mkdir(exist_ok=True, parents=True)
 
         # skip LFP streams
         if "-LFP" in stream_name:
@@ -141,146 +146,161 @@ class OpenEphysSynchronizer:
 
         # define the output file
         ephys_alignment_file = (
-            self.ephys_sync_output_directory / stream_name / "ephys_alignment.mmap"
+            self.ephys_sync_output_directory / stream_alphanumeric / "ephys_alignment.mmap"
         )
-        incomplete_file_name = (
-            self.ephys_sync_output_directory / stream_name / "ephys_alignment.incomplete.mmap"
-        )
+        # incomplete_file_name = (
+        #    self.ephys_sync_output_directory / stream_alphanumeric / "ephys_alignment.incomplete.mmap"
+        # )
         if self.recompute_completed == False and ephys_alignment_file.exists():
             print(f"Skipping {stream_name} because it already exists")
             return
 
-        npx_sample_numbers, npx_states, npx_full_words = self.load_sample_numbers_and_states(
-            stream_name
-        )
+        # create a temporary directory for the incomplete file
+        with tempfile.TemporaryDirectory() as tmpdirname:
 
-        # remap sample numbers into zero indexed range
-        npx_sample_numbers_remapped = self.remap_npx_samples(stream_name, npx_sample_numbers)
+            incomplete_file_name = Path(tmpdirname) / "ephys_alignment.incomplete.mmap"
 
-        # detect state changes
-        try:
-            npx_frame_states, npx_frame_numbers = get_npx_state_changes(
-                npx_sample_numbers_remapped,
-                npx_full_words,
-                self.npx_samplerate,
-                self.camera_samplerate,
+            npx_sample_numbers, npx_states, npx_full_words = self.load_sample_numbers_and_states(
+                stream_name
             )
-        except AssertionError:
-            print("\t Unable to get frame states from npx data")
-            return
 
-        # estimate the time of each state change
-        npx_datetimes = np.array(
-            [
-                ((self.recording_created + timedelta(seconds=i / self.npx_samplerate)).timestamp())
-                for i in npx_sample_numbers
+            # remap sample numbers into zero indexed range
+            npx_sample_numbers_remapped = self.remap_npx_samples(stream_name, npx_sample_numbers)
+
+            # detect state changes
+            try:
+                npx_frame_states, npx_frame_numbers = get_npx_state_changes(
+                    npx_sample_numbers_remapped,
+                    npx_full_words,
+                    self.npx_samplerate,
+                    self.camera_samplerate,
+                )
+            except AssertionError:
+                print("\t Unable to get frame states from npx data")
+                return
+
+            # estimate the time of each state change
+            npx_datetimes = np.array(
+                [
+                    (
+                        (
+                            self.recording_created + timedelta(seconds=i / self.npx_samplerate)
+                        ).timestamp()
+                    )
+                    for i in npx_sample_numbers
+                ]
+            )
+
+            # Ensure all frame skips match expected samplerate
+            frames_skipped = (
+                np.diff(npx_sample_numbers_remapped) / self.npx_samplerate * self.camera_samplerate
+            )
+            frames_skipped_int = np.round(frames_skipped).astype(int)
+            test = np.abs((frames_skipped_int - frames_skipped))
+            assert np.max(np.abs(test)) < 0.1
+
+            # Ensure all frame skips match expected samplerate
+            frames_skipped = (
+                np.diff(npx_sample_numbers_remapped) / self.npx_samplerate * self.camera_samplerate
+            )
+            frames_skipped_int = np.round(frames_skipped).astype(int)
+            test = np.abs((frames_skipped_int - frames_skipped))
+            assert np.max(np.abs(test)) < 0.1
+
+            camera_frame_states = self.camera_sync_df.trigger_states.values
+            camera_frame_numbers = self.camera_sync_df.index.values
+            camera_datetimes = self.camera_sync_df.datetime_est.values
+
+            # get the signals to align
+            signal1_frames = camera_frame_numbers
+            signal1_states = camera_frame_states
+            signal1_timestamps = camera_datetimes
+            signal2_frames = npx_frame_numbers
+            signal2_states = npx_frame_states
+            signal2_timestamps = npx_datetimes
+
+            # create a window of search_window_s to look for a match
+            search_window = [
+                signal2_timestamps[0] - self.search_window_s,
+                signal2_timestamps[0] + self.search_window_s,
             ]
-        )
+            search_mask = (signal1_timestamps >= search_window[0]) & (
+                signal1_timestamps <= search_window[1]
+            )
+            search_start = np.where(search_mask)[0][0]
 
-        # Ensure all frame skips match expected samplerate
-        frames_skipped = (
-            np.diff(npx_sample_numbers_remapped) / self.npx_samplerate * self.camera_samplerate
-        )
-        frames_skipped_int = np.round(frames_skipped).astype(int)
-        test = np.abs((frames_skipped_int - frames_skipped))
-        assert np.max(np.abs(test)) < 0.1
+            # drag a sliding window to find when the random state matches
+            correlations = sliding_correlation(
+                signal2_states[: self.frame_window],
+                signal1_states[search_mask],
+            )
 
-        # Ensure all frame skips match expected samplerate
-        frames_skipped = (
-            np.diff(npx_sample_numbers_remapped) / self.npx_samplerate * self.camera_samplerate
-        )
-        frames_skipped_int = np.round(frames_skipped).astype(int)
-        test = np.abs((frames_skipped_int - frames_skipped))
-        assert np.max(np.abs(test)) < 0.1
+            # ensure we found a match
+            if np.max(correlations) < 0.9:
+                print(f"\t NO CORRELATION FOUND {np.max(correlations)}")
+                return
 
-        camera_frame_states = self.camera_sync_df.trigger_states.values
-        camera_frame_numbers = self.camera_sync_df.index.values
-        camera_datetimes = self.camera_sync_df.datetime_est.values
+            # grab the point of match
+            peak_correlation = np.argmax(correlations)
+            start_position = search_start + peak_correlation
 
-        # get the signals to align
-        signal1_frames = camera_frame_numbers
-        signal1_states = camera_frame_states
-        signal1_timestamps = camera_datetimes
-        signal2_frames = npx_frame_numbers
-        signal2_states = npx_frame_states
-        signal2_timestamps = npx_datetimes
+            # create a figure to show the match, save to ephys_sync_output_directory as jpg
+            fig, axs = plt.subplots(ncols=2, figsize=(10, 1))
+            axs[0].plot(correlations)
+            axs[1].plot(signal1_states[start_position : start_position + 100])
+            axs[1].plot(signal2_states[:100])
+            correlation_figure_file = (
+                self.ephys_sync_output_directory / stream_alphanumeric / "correlation.jpg"
+            )
+            plt.savefig(correlation_figure_file)
+            plt.close()
 
-        # create a window of search_window_s to look for a match
-        search_window = [
-            signal2_timestamps[0] - self.search_window_s,
-            signal2_timestamps[0] + self.search_window_s,
-        ]
-        search_mask = (signal1_timestamps >= search_window[0]) & (
-            signal1_timestamps <= search_window[1]
-        )
-        search_start = np.where(search_mask)[0][0]
-
-        # drag a sliding window to find when the random state matches
-        correlations = sliding_correlation(
-            signal2_states[: self.frame_window],
-            signal1_states[search_mask],
-        )
-
-        # ensure we found a match
-        if np.max(correlations) < 0.9:
-            print(f"\t NO CORRELATION FOUND {np.max(correlations)}")
-            return
-
-        # grab the point of match
-        peak_correlation = np.argmax(correlations)
-        start_position = search_start + peak_correlation
-
-        # create a figure to show the match, save to ephys_sync_output_directory as jpg
-        fig, axs = plt.subplots(ncols=2, figsize=(10, 1))
-        axs[0].plot(correlations)
-        axs[1].plot(signal1_states[start_position : start_position + 100])
-        axs[1].plot(signal2_states[:100])
-        correlation_figure_file = (
-            self.ephys_sync_output_directory / stream_name / "correlation.jpg"
-        )
-        plt.savefig(correlation_figure_file)
-        plt.close()
-
-        matches = [
-            state == signal1_states[position + start_position]
-            for position, state in enumerate(signal2_states)
-        ]
-
-        logger.info(f"\t creating ephys alignment mmap")
-
-        # create the mmap
-        ephys_alignment_file.parent.mkdir(exist_ok=True, parents=True)
-        memmap_array = np.memmap(
-            incomplete_file_name,
-            dtype="int32",
-            mode="w+",
-            shape=len(camera_frame_states),
-        )
-        for i in camera_frame_numbers:
-            memmap_array[i] = -1
-            if i - start_position < 0:
-                continue
-            else:
-                if i - start_position < len(signal2_frames):
-                    memmap_array[i] = signal2_frames[i - start_position]
-
-        # move the incomplete file to the complete file
-        incomplete_file_name.rename(ephys_alignment_file)
-
-        # ensure memmap array is properly synchronized
-        start = 10000
-        stop = 10100
-        fig, ax = plt.subplots(figsize=(5, 1))
-        ax.plot(camera_frame_states[start:stop])
-        ax.plot(
-            npx_frame_states[
-                (npx_frame_numbers >= memmap_array[start])
-                & (npx_frame_numbers <= memmap_array[stop])
+            matches = [
+                state == signal1_states[position + start_position]
+                for position, state in enumerate(signal2_states)
             ]
-        )
-        alignment_figure_file = self.ephys_sync_output_directory / stream_name / "alignment.jpg"
-        plt.savefig(alignment_figure_file)
-        plt.close()
+
+            logger.info(f"\t creating ephys alignment mmap")
+
+            # create the mmap
+            ephys_alignment_file.parent.mkdir(exist_ok=True, parents=True)
+            memmap_array = np.memmap(
+                incomplete_file_name,
+                dtype="int32",
+                mode="w+",
+                shape=len(camera_frame_states),
+            )
+            for i in camera_frame_numbers:
+                memmap_array[i] = -1
+                if i - start_position < 0:
+                    continue
+                else:
+                    if i - start_position < len(signal2_frames):
+                        memmap_array[i] = signal2_frames[i - start_position]
+
+            # move the incomplete file to the complete file
+            #Path(incomplete_file_name).rename(ephys_alignment_file)
+            shutil.move(
+                incomplete_file_name,
+                ephys_alignment_file
+            )
+
+            # ensure memmap array is properly synchronized
+            start = 10000
+            stop = 10100
+            fig, ax = plt.subplots(figsize=(5, 1))
+            ax.plot(camera_frame_states[start:stop])
+            ax.plot(
+                npx_frame_states[
+                    (npx_frame_numbers >= memmap_array[start])
+                    & (npx_frame_numbers <= memmap_array[stop])
+                ]
+            )
+            alignment_figure_file = (
+                self.ephys_sync_output_directory / stream_alphanumeric / "alignment.jpg"
+            )
+            plt.savefig(alignment_figure_file)
+            plt.close()
 
 
 def get_npx_state_changes(npx_sample_numbers, npx_states, npx_samplerate, camera_samplerate):

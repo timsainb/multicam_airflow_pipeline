@@ -3,15 +3,17 @@ import pandas as pd
 import requests
 from io import BytesIO
 from pathlib import Path
-from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
+from multicamera_airflow_pipeline.tim_240731.interface.local import LocalRunner
 from datetime import datetime
 import textwrap
 import inspect
 import time
 import yaml
+import socket
+import subprocess
 
+hostname = socket.gethostname()
 import logging
-logging.basicConfig(level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,48 @@ def check_2d_completion(output_directory_predictions):
     return (output_directory_predictions / "completed.log").exists()
 
 
-def predict_2d(
+def get_gpu_memory_usage(gpu_id):
+    """
+    Returns the memory usage of a specified GPU.
+    """
+    result = subprocess.run(
+        [
+            "nvidia-smi",
+            "--query-gpu=memory.used",
+            "--format=csv,noheader,nounits",
+            "-i",
+            str(gpu_id),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    return int(result.stdout.strip())
+
+
+def get_cuda_visible_device_with_lowest_memory():
+    """
+    Finds the GPU with the lowest memory usage and sets CUDA_VISIBLE_DEVICES to that GPU.
+    """
+    # Get the number of GPUs
+    result = subprocess.run(
+        ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"], capture_output=True, text=True
+    )
+    gpus = result.stdout.strip().split("\n")
+    num_gpus = len(gpus)
+
+    lowest_memory_usage = None
+    best_gpu = None
+
+    for i in range(num_gpus):
+        mem_usage = get_gpu_memory_usage(i)
+        if lowest_memory_usage is None or mem_usage < lowest_memory_usage:
+            lowest_memory_usage = mem_usage
+            best_gpu = i
+
+    return best_gpu
+
+
+def predict_2d_local(
     recording_row,
     job_directory,
     output_directory,
@@ -47,15 +90,13 @@ def predict_2d(
         Path(recording_row.video_location_on_o2) / recording_row.video_recording_id
     )
 
-    assert recording_directory.exists(), f"Recording directory {recording_directory} does not exist"
-
     # where to save output
     output_directory_predictions = (
         output_directory / "2D_predictions" / recording_row.video_recording_id
     )
     output_directory_predictions.mkdir(parents=True, exist_ok=True)
     current_datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    remote_job_directory = job_directory / current_datetime_str
+    current_job_directory = job_directory / current_datetime_str
 
     # check if sync successfully completed
     if config["prediction_2d"]["recompute_completed"] == False:
@@ -71,7 +112,8 @@ def predict_2d(
     )
 
     # where tensorrt compiled models are saved (specific to GPU, so we compute on the fly)
-    tensorrt_model_directory = output_directory / "tensorrt"
+    tensorrt_model_directory = output_directory / "tensorrt" / hostname
+    tensorrt_model_directory.mkdir(parents=True, exist_ok=True)
 
     params = {
         "recording_directory": recording_directory.as_posix(),
@@ -80,26 +122,19 @@ def predict_2d(
         "tensorrt_model_directory": tensorrt_model_directory.as_posix(),
     }
 
-    duration_requested = convert_minutes_to_hms(
-        recording_row.duration_m * config["o2"]["prediction_2d"]["o2_runtime_multiplier"]
-    )
+    conda_env = Path(config["tensorrt_conversion_local"]["conda_env"])
+
+    # Call the function
+    gpu_to_use = get_cuda_visible_device_with_lowest_memory()
+    logger.info(f"Using GPU {gpu_to_use}")
 
     # create the job runner
-    runner = O2Runner(
+    runner = LocalRunner(
         job_name_prefix=f"{recording_row.video_recording_id}_2d_predictions",
-        remote_job_directory=remote_job_directory,
-        conda_env="/n/groups/datta/tim_sainburg/conda_envs/mmdeploy",
-        o2_username=recording_row.username,
-        o2_server="login.o2.rc.hms.harvard.edu",
+        job_directory=current_job_directory,
+        conda_env=conda_env,
         job_params=params,
-        o2_n_cpus=config["o2"]["prediction_2d"]["o2_n_cpus"],
-        o2_memory=config["o2"]["prediction_2d"]["o2_memory"],
-        o2_time_limit=duration_requested,
-        o2_queue=config["o2"]["prediction_2d"]["o2_queue"],
-        o2_exclude=config["o2"]["prediction_2d"]["o2_exclude"],
-        o2_qos=config["o2"]["prediction_2d"]["o2_qos"],
-        o2_gres=config["o2"]["prediction_2d"]["o2_gres"],
-        modules_to_load=["gcc/9.2.0", "cuda/11.7"],
+        gpu_to_use=gpu_to_use,
     )
 
     if config["prediction_2d"]["use_tensorrt"]:
@@ -107,21 +142,23 @@ def predict_2d(
             f"""
         # load params
         import yaml
-        params_file = "{runner.remote_job_directory / f"{runner.job_name}.params.yaml"}"
+        params_file = "{runner.job_directory / f"{runner.job_name}.params.yaml"}"
         config_file = "{config_file.as_posix()}"
 
         params = yaml.safe_load(open(params_file, 'r'))
         config = yaml.safe_load(open(config_file, 'r'))
-
-        # covert models to tensorrt
+        
+        config["tensorrt_conversion"]["conda_env"] = "{conda_env.as_posix()}"
+        # convert models to tensorrt
         from multicamera_airflow_pipeline.tim_240731.keypoints.tensorrt import RTMModelConverter
         model_converter = RTMModelConverter(
             tensorrt_output_directory = params["tensorrt_model_directory"],
+            is_local=True,
             **config["tensorrt_conversion"]
         )
         model_converter.run()
-
-        # grab sync cameras function
+        
+        # run predictions
         from multicamera_airflow_pipeline.tim_240731.keypoints.predict_2D import Inferencer2D
         camera_calibrator = Inferencer2D(
             recording_directory = params["recording_directory"],
@@ -138,7 +175,9 @@ def predict_2d(
             f"""
         # load params
         import yaml
-        params_file = "{runner.remote_job_directory / f"{runner.job_name}.params.yaml"}"
+        import sys
+        print(sys.executable)
+        params_file = "{runner.job_directory / f"{runner.job_name}.params.yaml"}"
         config_file = "{config_file.as_posix()}"
 
         params = yaml.safe_load(open(params_file, 'r'))
@@ -160,15 +199,6 @@ def predict_2d(
     print(runner.python_script)
 
     runner.run()
-
-    # wait until the job is finished
-    # 10000/60/24 = roughly 1 week
-    for i in range(10000):
-        # check job status every n seconds
-        status = runner.check_job_status()
-        if status:
-            break
-        time.sleep(60)
 
     # check if sync successfully completed
     if check_2d_completion(output_directory_predictions):

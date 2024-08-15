@@ -14,7 +14,9 @@ import joblib, os, h5py
 import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
 import logging
-
+import tempfile
+import shutil
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.info(f"Python interpreter binary location: {sys.executable}")
 
@@ -22,6 +24,7 @@ from multicamera_airflow_pipeline.tim_240731.skeletons.defaults import (
     dataset_info,
     parents_dict,
     keypoint_info,
+    skeleton_info,
     keypoints,
     keypoints_order,
     kpt_dict,
@@ -84,84 +87,101 @@ class SizeNormalizer:
 
         logger.info(f"Starting size normalization")
         self.load_predictions_3d()
-        self.initialize_output_folder()
 
-        keypoints = np.array(list(self.kpt_dict.keys()))
+        # Create a temporary directory
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            # Convert the temporary directory path to a Path object
+            tmpdir_path = Path(tmpdirname)
+            tmp_size_norm_file, tmp_size_norm_angles_file = self.initialize_output_folder(
+                tmpdir_path
+            )
 
-        keypoints_to_index = {kpt: i for i, kpt in enumerate(keypoints)}
-        # TODO batch this, costs a lot of memory...
-        kpts = np.array(self.predictions_3D_mmap)
+            keypoints = np.array(list(self.kpt_dict.keys()))
 
-        # add a 'spine base' to set as the
-        spine_high_idx = np.where(np.array(keypoints) == "spine_high")[0][0]
-        spine_mid_idx = np.where(np.array(keypoints) == "spine_mid")[0][0]
-        spine_base_pos = np.expand_dims((kpts[:, spine_mid_idx] + kpts[:, spine_high_idx]) / 2, 1)
-        kpts = np.concatenate([kpts, spine_base_pos], axis=1)
-        keypoints_to_index["spine_base"] = len(keypoints)
+            keypoints_to_index = {kpt: i for i, kpt in enumerate(keypoints)}
+            # TODO batch this, costs a lot of memory...
+            kpts = np.array(self.predictions_3D_mmap)
 
-        # initialize positions (fill in any nans, shouldn't be needed with gimbal)
-        kpts = generate_initial_positions(kpts)
+            # add a 'spine base' to set as the
+            spine_high_idx = np.where(np.array(keypoints) == "spine_high")[0][0]
+            spine_mid_idx = np.where(np.array(keypoints) == "spine_mid")[0][0]
+            spine_base_pos = np.expand_dims(
+                (kpts[:, spine_mid_idx] + kpts[:, spine_high_idx]) / 2, 1
+            )
+            kpts = np.concatenate([kpts, spine_base_pos], axis=1)
+            keypoints_to_index["spine_base"] = len(keypoints)
 
-        # convert keypoints to a dictionary
-        kpts_dict = {}
-        for key, k_index in keypoints_to_index.items():
-            kpts_dict[key] = kpts[:, k_index]
-        kpts_dict["joints"] = list(keypoints_to_index.keys())
-        kpts = kpts_dict
+            # initialize positions (fill in any nans, shouldn't be needed with gimbal)
+            kpts = generate_initial_positions(kpts)
 
-        # assign hierarchy
-        kpts["hierarchy"] = self.hierarchy
-        kpts["root_joint"] = self.root_joint
+            # convert keypoints to a dictionary
+            kpts_dict = {}
+            for key, k_index in keypoints_to_index.items():
+                kpts_dict[key] = kpts[:, k_index]
+            kpts_dict["joints"] = list(keypoints_to_index.keys())
+            kpts = kpts_dict
 
-        # compute bone lengths and stds
-        kpts = get_bone_lengths(
-            kpts,
-            self.template_bone_length_mean,
-            self.template_bone_length_std,
-        )
+            # assign hierarchy
+            kpts["hierarchy"] = self.hierarchy
+            kpts["root_joint"] = self.root_joint
 
-        # create a skeleton to recompute positions from angles
-        kpts = generate_kpt_offsets_and_skeleton(kpts, self.hierarchy)
+            # compute bone lengths and stds
+            kpts = get_bone_lengths(
+                kpts,
+                self.template_bone_length_mean,
+                self.template_bone_length_std,
+            )
 
-        # calculate joint angles and add them in as kpts[joint+'_angles']
-        kpts = calculate_joint_angles_parallel(
-            kpts,
-            root_joint=self.root_joint,
-            samples_to_calculate=self.subsample,
-            n_jobs=self.n_jobs,
-        )
+            # create a skeleton to recompute positions from angles
+            kpts = generate_kpt_offsets_and_skeleton(kpts, self.hierarchy)
 
-        # compute new sizes
-        kpts = size_normalize(
-            kpts,
-            template_bone_length_mean=self.template_bone_length_mean,
-            hierarchy=self.hierarchy,
-            root_joint=self.root_joint,
-            rigid_bones=self.rigid_bones,
-        )
+            # calculate joint angles and add them in as kpts[joint+'_angles']
+            kpts = calculate_joint_angles_parallel(
+                kpts,
+                root_joint=self.root_joint,
+                samples_to_calculate=self.subsample,
+                n_jobs=self.n_jobs,
+            )
 
-        # convert back to array
-        recomputed_keypoints = np.stack(
-            [kpts[f"recomputed_{joint}"] for joint in keypoints], axis=1
-        )
+            # compute new sizes
+            kpts = size_normalize(
+                kpts,
+                template_bone_length_mean=self.template_bone_length_mean,
+                hierarchy=self.hierarchy,
+                root_joint=self.root_joint,
+                rigid_bones=self.rigid_bones,
+            )
 
-        # convert angles back to array
-        recomputed_angles = np.stack(
-            [kpts[f"recomputed_angles_{joint}"] for joint in keypoints], axis=1
-        )
-        recomputed_angles[:, :, 2] = (
-            recomputed_angles[:, :, 2]
-            + np.expand_dims(kpts[f"{self.root_joint}_angles"][:, 2], -1)
-        ) % (2 * np.pi)
-        recomputed_angles[:, :, 2][recomputed_angles[:, :, 2] > np.pi] -= 2 * np.pi
+            # convert back to array
+            recomputed_keypoints = np.stack(
+                [kpts[f"recomputed_{joint}"] for joint in keypoints], axis=1
+            )
 
-        self.size_norm_mmap[:] = recomputed_keypoints
-        self.size_norm_mmap_angles[:] = recomputed_angles
+            # convert angles back to array
+            recomputed_angles = np.stack(
+                [kpts[f"recomputed_angles_{joint}"] for joint in keypoints], axis=1
+            )
+            recomputed_angles[:, :, 2] = (
+                recomputed_angles[:, :, 2]
+                + np.expand_dims(kpts[f"{self.root_joint}_angles"][:, 2], -1)
+            ) % (2 * np.pi)
+            recomputed_angles[:, :, 2][recomputed_angles[:, :, 2] > np.pi] -= 2 * np.pi
 
+            self.size_norm_mmap[:] = recomputed_keypoints
+            self.size_norm_mmap_angles[:] = recomputed_angles
+
+            # move outputs to self.size_norm_output_directory
+            shutil.move(
+                tmp_size_norm_file, self.size_norm_output_directory / tmp_size_norm_file.name
+            )
+            shutil.move(
+                tmp_size_norm_angles_file,
+                self.size_norm_output_directory / tmp_size_norm_angles_file.name,
+            )
         # mark as completed
         (self.size_norm_output_directory / "completed.log").touch()
 
-    def initialize_output_folder(self):
+    def initialize_output_folder(self, tmpdir_path):
 
         self.size_norm_output_directory.mkdir(exist_ok=True, parents=True)
         # initialize
@@ -170,13 +190,11 @@ class SizeNormalizer:
         keypoints_3d_dtype = mmap_dtype
         keypoints_3d_shape_str = "x".join(map(str, keypoints_3d_shape))
         size_norm_file = (
-            self.size_norm_output_directory
-            / f"size_norm.{keypoints_3d_dtype}.{keypoints_3d_shape_str}.mmap"
+            tmpdir_path / f"size_norm.{keypoints_3d_dtype}.{keypoints_3d_shape_str}.mmap"
         )
 
         size_norm_angles_file = (
-            self.size_norm_output_directory
-            / f"size_norm_angles.{keypoints_3d_dtype}.{keypoints_3d_shape_str}.mmap"
+            tmpdir_path / f"size_norm_angles.{keypoints_3d_dtype}.{keypoints_3d_shape_str}.mmap"
         )
 
         self.size_norm_mmap = np.memmap(
@@ -192,6 +210,8 @@ class SizeNormalizer:
             mode="w+",
             shape=keypoints_3d_shape,
         )
+
+        return size_norm_file, size_norm_angles_file
 
 
 def load_memmap_from_filename(filename):

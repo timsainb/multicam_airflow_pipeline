@@ -5,10 +5,9 @@ from datetime import datetime, timedelta
 import yaml
 import logging
 import sys
-
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.info(f"Python interpreter binary location: {sys.executable}")
-
 
 class CameraSynchronizer:
     def __init__(
@@ -67,9 +66,10 @@ class CameraSynchronizer:
         self.trigger_states = states[pins == self.trigger_pin].astype(int)
 
         # ensure that no frames have beeen skipped in the microcontroller trigger
-        assert (
-            np.any(np.diff(self.trigger_times) / self.isi_uS > 1.5) == False
-        ), "\t Skipped frames in microcontroller trigger"
+        if np.any(np.diff(self.trigger_times) / self.isi_uS > 1.5):
+            max_skip = np.max(np.diff(self.trigger_times) / self.isi_uS)
+            logger.info(f"Skipped frames in microcontroller trigger: {max_skip}")
+            raise ValueError("Skipped frames in microcontroller trigger")
 
         # get recording length in hours
         self.recording_length_hours = round(len(self.trigger_times) / self.samplerate / 60 / 60, 5)

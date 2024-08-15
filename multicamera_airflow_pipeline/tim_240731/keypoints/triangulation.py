@@ -12,7 +12,10 @@ from scipy.ndimage import uniform_filter
 from scipy.signal import medfilt
 import sys
 import logging
-
+import tempfile
+import shutil
+import os
+logging.basicConfig(level=logging.DEBUG)
 print("Python interpreter binary location:", sys.executable)
 
 logger = logging.getLogger(__name__)
@@ -144,16 +147,33 @@ class Triangulator:
             int(len(self.recording_predictions) / self.n_cameras) == n_videos_expected
         ), f"Expected {n_videos_expected} videos, got {int(len(self.recording_predictions) / self.n_cameras)}"
 
-        # prepare the output files
-        self.create_output_files()
+        # Create a temporary directory
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            # Convert the temporary directory path to a Path object
+            tmpdir_path = Path(tmpdirname)
+            # prepare the output files
+            (
+                tmp_predictions_2d_file,
+                tmp_confidences_2d_file,
+                tmp_predictions_3d_file,
+                tmp_confidences_3d_file,
+                tmp_reprojection_errors_file,
+            ) = self.create_output_files(tmpdir_path)
 
-        # NOTE: chunks are based on the length of videos, so if a video is e.g. 120 minutes long
-        #  this can be a large memory requirement
-        logger.info("Running triangulation over chunks")
-        for chunk_i, start_frame in enumerate(
-            tqdm(np.sort(self.recording_predictions.frame.unique()), desc="chunk")
-        ):
-            self.triangulate_chunk(start_frame, chunk_i)
+            # NOTE: chunks are based on the length of videos, so if a video is e.g. 120 minutes long
+            #  this can be a large memory requirement
+            logger.info("Running triangulation over chunks")
+            for chunk_i, start_frame in enumerate(
+                tqdm(np.sort(self.recording_predictions.frame.unique()), desc="chunk")
+            ):
+                self.triangulate_chunk(start_frame, chunk_i)
+
+            # move the final temp_coordinates_file to the output directory
+            shutil.move(tmp_predictions_2d_file, self.output_directory_triangulation)
+            shutil.move(tmp_confidences_2d_file, self.output_directory_triangulation)
+            shutil.move(tmp_predictions_3d_file, self.output_directory_triangulation)
+            shutil.move(tmp_confidences_3d_file, self.output_directory_triangulation)
+            shutil.move(tmp_reprojection_errors_file, self.output_directory_triangulation)
 
         # mark triangulation as completed
         logger.info("Saving triangulations")
@@ -318,7 +338,7 @@ class Triangulator:
         plt.savefig(triangulation_sample_file)
         plt.close()
 
-    def create_output_files(self):
+    def create_output_files(self, tmpdir_path):
         logger.info("Creating output files")
         # set the shape and dtype of arrays
         keypoints_2d_shape = (self.n_frames, self.n_cameras, self.n_keypoints, 2)
@@ -342,23 +362,19 @@ class Triangulator:
         reprojection_errors_shape_str = "x".join(map(str, reprojection_errors_shape))
 
         predictions_3d_file = (
-            self.output_directory_triangulation
-            / f"predictions_3d.{keypoints_3d_dtype}.{keypoints_3d_shape_str}.mmap"
+            tmpdir_path / f"predictions_3d.{keypoints_3d_dtype}.{keypoints_3d_shape_str}.mmap"
         )
         predictions_2d_file = (
-            self.output_directory_triangulation
-            / f"predictions_2d.{keypoints_2d_dtype}.{keypoints_2d_shape_str}.mmap"
+            tmpdir_path / f"predictions_2d.{keypoints_2d_dtype}.{keypoints_2d_shape_str}.mmap"
         )
         confidences_2d_file = (
-            self.output_directory_triangulation
-            / f"confidences_2d.{confidences_2d_dtype}.{confidences_2d_shape_str}.mmap"
+            tmpdir_path / f"confidences_2d.{confidences_2d_dtype}.{confidences_2d_shape_str}.mmap"
         )
         confidences_3d_file = (
-            self.output_directory_triangulation
-            / f"confidences_3d.{confidences_3d_dtype}.{confidences_3d_shape_str}.mmap"
+            tmpdir_path / f"confidences_3d.{confidences_3d_dtype}.{confidences_3d_shape_str}.mmap"
         )
         reprojection_errors_file = (
-            self.output_directory_triangulation
+            tmpdir_path
             / f"reprojection_errors.{reprojection_errors_dtype}.{reprojection_errors_shape_str}.mmap"
         )
 
@@ -396,6 +412,14 @@ class Triangulator:
             dtype=reprojection_errors_dtype,
             mode="w+",
             shape=reprojection_errors_shape,
+        )
+
+        return (
+            predictions_2d_file,
+            confidences_2d_file,
+            predictions_3d_file,
+            confidences_3d_file,
+            reprojection_errors_file,
         )
 
     def load_predictions(self):
@@ -486,7 +510,14 @@ def same_frames_for_all_cameras(df):
     camera_frames = df.groupby("camera")["frame"].apply(set)
 
     # Check if all cameras have the same set of frames
-    return len(camera_frames.apply(frozenset).unique()) == 1
+    if len(camera_frames.apply(frozenset).unique()) == 1:
+        return True
+    else:
+        # Print the cameras with different frames
+        logger.info('Different frames for cameras')
+        for camera, frames in camera_frames.items():
+            logger.info(f"{camera}: {frames}")
+        return False
 
 
 def leave_one_out_2d_filter(

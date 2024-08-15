@@ -1,6 +1,6 @@
 import sys
 import logging
-
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.info(f"Python interpreter binary location: {sys.executable}")
 
@@ -28,6 +28,7 @@ from sklearn.linear_model import LinearRegression
 # load skeleton
 from multicamera_airflow_pipeline.tim_240731.skeletons.defaults import (
     dataset_info,
+    skeleton_info,
     parents_dict,
     keypoint_info,
     keypoints,
@@ -47,7 +48,7 @@ class EgocentricAligner:
         recompute_completed=False,
         alignment_method="rigid",
     ):
-        self.predictions_3d_file = predictions_3d_file
+        self.predictions_3d_file = Path(predictions_3d_file)
         self.batch_size = batch_size
         self.egocentric_alignment_output_directory = Path(egocentric_alignment_output_directory)
         self.distance_from_median_thresh = distance_from_median_thresh
@@ -98,31 +99,42 @@ class EgocentricAligner:
             align_poses = align_poses_nonrigid
 
         logger.info(f"initializing output")
-        self.initialize_output()
 
-        # prepopulate batch with unmodified data
-        for batch in tqdm(range(self.n_batches), desc="performing alignment"):
-            batch_start = self.batch_size * batch
-            batch_end = self.batch_size * (batch + 1)
-            coordinates = np.array(self.predictions_3D_mmap)[batch_start:batch_end]
-            aligned_poses = align_poses(
-                coordinates,
-            )
-            self.aligned_poses_mmap[batch_start:batch_end] = aligned_poses
+        # Create a temporary directory
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            # Convert the temporary directory path to a Path object
+            tmpdir_path = Path(tmpdirname)
+            temp_aligned_poses_file = self.initialize_output(tmpdir_path)
 
-        if self.plot_steps:
-            plot_keypoints(
-                self.aligned_poses_mmap[0],
-                keypoints,
-                save_location=self.egocentric_alignment_output_directory
-                / "poses_after_alignment.png",
+            # prepopulate batch with unmodified data
+            for batch in tqdm(range(self.n_batches), desc="performing alignment"):
+                batch_start = self.batch_size * batch
+                batch_end = self.batch_size * (batch + 1)
+                coordinates = np.array(self.predictions_3D_mmap)[batch_start:batch_end]
+                aligned_poses = align_poses(
+                    coordinates,
+                )
+                self.aligned_poses_mmap[batch_start:batch_end] = aligned_poses
+
+            if self.plot_steps:
+                plot_keypoints(
+                    self.aligned_poses_mmap[0],
+                    keypoints,
+                    save_location=self.egocentric_alignment_output_directory
+                    / "poses_after_alignment.png",
+                )
+
+            # move the final temp_coordinates_file to the output directory
+            shutil.move(
+                temp_aligned_poses_file,
+                self.egocentric_alignment_output_directory / temp_aligned_poses_file.name,
             )
 
         # save completed file
         with open(self.egocentric_alignment_output_directory / "completed.txt", "w") as f:
             f.write("completed")
 
-    def initialize_output(self):
+    def initialize_output(self, tmpdir_path):
         # initialize
         mmap_dtype = "float32"
         keypoints_3d_shape = self.predictions_3D_mmap.shape
@@ -130,12 +142,9 @@ class EgocentricAligner:
         keypoints_3d_shape_str = "x".join(map(str, keypoints_3d_shape))
 
         aligned_poses_file = (
-            self.egocentric_alignment_output_directory
+            tmpdir_path
             / f"egocentric_alignment_rigid.{keypoints_3d_dtype}.{keypoints_3d_shape_str}.mmap"
         )
-        # if aligned_poses_file.exists():
-        #    print('aligned poses exists, continuing')
-        #    continue
 
         self.aligned_poses_mmap = np.memmap(
             aligned_poses_file,
@@ -143,6 +152,8 @@ class EgocentricAligner:
             mode="w+",
             shape=keypoints_3d_shape,
         )
+
+        return aligned_poses_file
 
 
 def load_memmap_from_filename(filename):

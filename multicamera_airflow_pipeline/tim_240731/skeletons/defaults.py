@@ -16,6 +16,7 @@ except:
     # Now import the dataset_info dictionary
     from sainburg25pt import dataset_info, parents_dict
 keypoint_info = dataset_info["keypoint_info"]
+skeleton_info = dataset_info["skeleton_info"]
 keypoints = [keypoint_info[i]["name"] for i in keypoint_info.keys()]
 keypoints = np.array(keypoints)
 keypoints_order = keypoints

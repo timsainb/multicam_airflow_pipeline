@@ -11,6 +11,7 @@ import time
 import yaml
 
 import logging
+logging.basicConfig(level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ def convert_minutes_to_hms(minutes_float):
 
 def check_spikesorting_completion(spikesorting_output_directory, n_ephys_streams_expected):
     n_sorts_found = len(list(spikesorting_output_directory.glob("*/sort_result")))
-    if n_sorts_found == n_ephys_streams_expected:
+    if n_sorts_found >= n_ephys_streams_expected:
         return True
     else:
         return False

@@ -10,7 +10,7 @@ import os
 import shutil
 import sys
 import logging
-
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.info(f"Python interpreter binary location: {sys.executable}")
 
@@ -36,6 +36,7 @@ class RTMModelConverter:
         path_to_demo_image_pose="/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/example_data/test_mouse_cropped.png",
         path_to_mmdetection_config="/n/groups/datta/tim_sainburg/projects/mmdeploy/configs/mmdet/detection/detection_tensorrt_static-320x320.py",
         path_to_mmpose_config="/n/groups/datta/tim_sainburg/projects/mmdeploy/configs/mmpose/pose-detection_simcc_tensorrt_dynamic-256x256.py",
+        is_local=False,
     ):
         self.path_to_rmpose_config = Path(path_to_rmpose_config)
         self.path_to_rmpose_checkpoint = Path(path_to_rmpose_checkpoint)
@@ -51,6 +52,7 @@ class RTMModelConverter:
         self.path_to_mmdetection_config = path_to_mmdetection_config
         self.path_to_mmpose_config = path_to_mmpose_config
         self.skeleton_py_file = Path(skeleton_py_file)
+        self.is_local = is_local
 
         # get the device
         cuda_available = torch.cuda.is_available()
@@ -80,12 +82,16 @@ class RTMModelConverter:
         return sitecustomize_script
 
     def check_if_detector_tensorrt_exists(self):
+        logger.info(f"Checking if tensorrt model exists at: {self.rtmdetection_output}")
         return (self.rtmdetection_output / "output_tensorrt.jpg").exists()
 
     def check_if_pose_tensorrt_exists(self):
+        logger.info(f"Checking if tensorrt model exists at: {self.rtmpose_output}")
         return (self.rtmpose_output / "output_tensorrt.jpg").exists()
 
     def convert_pose_to_tensorrt(self):
+        logger.info(f"Converting pose model to tensorrt. input: {self.rtmpose_output}")
+
         if self.check_if_pose_tensorrt_exists():
             logger.info("TensorRT pose model already exists.")
             return
@@ -102,8 +108,14 @@ class RTMModelConverter:
         with open(temp_sitecustomize_path, "w") as file:
             file.write(sitecustomize_script)
 
-        model_conversion_script = f"module load cuda/11.7\n"
-        model_conversion_script += f"source activate {self.conda_env};\n"
+        # warning: this will switch out current cuda module
+        if self.is_local:
+            # local (at least on peromoseq) needs to source conda first
+            model_conversion_script = "source $(conda info --base)/etc/profile.d/conda.sh;\n"
+            model_conversion_script += f"conda activate {self.conda_env};\n"
+        else:
+            model_conversion_script = f"module load cuda/11.7\n"
+            model_conversion_script += f"source activate {self.conda_env};\n"
         # # Set PYTHONPATH to include the directory where sitecustomize.py is located
         model_conversion_script += f"export PYTHONPATH={temp_dir}:$PYTHONPATH;\n"
         model_conversion_script += (
@@ -115,9 +127,10 @@ class RTMModelConverter:
         model_conversion_script += f" {self.path_to_demo_image_pose}"
         model_conversion_script += f" --work-dir { self.rtmpose_output}"
         model_conversion_script += f" --device cuda:0"
-        model_conversion_script += f" --show"
+        # model_conversion_script += f" --log-level DEBUG"
+        # model_conversion_script += f" --show"
         model_conversion_script += f" --dump-info"  # dump sdk info
-
+        print(model_conversion_script)
         # Run the model conversion script
         process = subprocess.Popen(
             model_conversion_script,
@@ -126,6 +139,7 @@ class RTMModelConverter:
             stderr=subprocess.STDOUT,
             bufsize=1,
             universal_newlines=True,
+            executable="/bin/bash" if self.is_local else None,
         )
         # Read output line by line as it is produced
         for line in process.stdout:
@@ -141,6 +155,8 @@ class RTMModelConverter:
         logger.info(f"model output at: {self.rtmpose_output}")
 
     def convert_detection_to_tensorrt(self):
+        logger.info(f"Converting detection model to tensorrt. input: {self.rtmdetection_output}")
+
         if self.check_if_detector_tensorrt_exists():
             logger.info("TensorRT detection model already exists.")
             return
@@ -158,8 +174,13 @@ class RTMModelConverter:
             file.write(sitecustomize_script)
 
         # warning: this will switch out current cuda module
-        model_conversion_script = f"module load cuda/11.7\n"
-        model_conversion_script += f"source activate {self.conda_env};\n"
+        if self.is_local:
+            # local (at least on peromoseq) needs to source conda first
+            model_conversion_script = "source $(conda info --base)/etc/profile.d/conda.sh;\n"
+            model_conversion_script += f"conda activate {self.conda_env};\n"
+        else:
+            model_conversion_script = f"module load cuda/11.7\n"
+            model_conversion_script += f"source activate {self.conda_env};\n"
         # # Set PYTHONPATH to include the directory where sitecustomize.py is located
         model_conversion_script += f"export PYTHONPATH={temp_dir}:$PYTHONPATH;\n"
         model_conversion_script += (
@@ -171,7 +192,8 @@ class RTMModelConverter:
         model_conversion_script += f" {self.path_to_demo_image_detection}"
         model_conversion_script += f" --work-dir { self.rtmdetection_output}"
         model_conversion_script += f" --device cuda:0"
-        model_conversion_script += f" --show"
+        # model_conversion_script += f" --log-level DEBUG"
+        # model_conversion_script += f" --show"
         model_conversion_script += f" --dump-info"  # dump sdk info
 
         # Run the model conversion script
@@ -182,7 +204,9 @@ class RTMModelConverter:
             stderr=subprocess.STDOUT,
             bufsize=1,
             universal_newlines=True,
+            executable="/bin/bash" if self.is_local else None,
         )
+
         # Read output line by line as it is produced
         for line in process.stdout:
             print(line, end="")

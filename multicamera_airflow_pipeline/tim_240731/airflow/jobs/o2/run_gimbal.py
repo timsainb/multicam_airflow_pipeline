@@ -11,6 +11,7 @@ import time
 import yaml
 
 import logging
+logging.basicConfig(level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,7 @@ def run_gimbal(
         o2_exclude=config["o2"]["gimbal"]["o2_exclude"],
         o2_qos=config["o2"]["gimbal"]["o2_qos"],
         o2_gres=config["o2"]["gimbal"]["o2_gres"],
+        modules_to_load=["gcc/9.2.0", "cuda/12.1"],
     )
 
     runner.python_script = textwrap.dedent(

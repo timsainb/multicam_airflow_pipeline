@@ -29,6 +29,10 @@ from multicamera_airflow_pipeline.tim_240731.airflow.jobs.local.predict_2d_local
 
 from multicamera_airflow_pipeline.tim_240731.airflow.jobs import await_2d_predictions
 
+logger = logging.getLogger(__name__)
+logger.info(f"Python interpreter binary location: {sys.executable}")
+
+
 from airflow.decorators import task
 from airflow.models.dag import DAG
 from airflow.models import DagBag
@@ -36,11 +40,6 @@ from airflow import settings
 from airflow.utils.dag_cycle_tester import test_cycle
 from airflow.models import DagModel
 from airflow.operators.python import PythonOperator
-from airflow.utils.dates import days_ago
-
-logger = logging.getLogger(__name__)
-logger.info(f"Python interpreter binary location: {sys.executable}")
-
 
 sync_cameras_task = task(sync_cameras.sync_cameras)
 predict_2d_task = task(predict_2d.predict_2d)
@@ -55,12 +54,6 @@ egocentric_alignment_task = task(egocentric_alignment.egocentric_alignment)
 compute_continuous_features_task = task(compute_continuous_features.compute_continuous_features)
 await_2d_predictions_task = task(await_2d_predictions.await_2d_predictions)
 predict_2d_local_task = task(predict_2d_local, pool="local_gpu_pool")
-
-
-def read_google_sheet(spreadsheet_url):
-    response = requests.get(spreadsheet_url)
-    recording_df = pd.read_csv(BytesIO(response.content))
-    return recording_df
 
 
 class AirflowDAG:
@@ -97,24 +90,32 @@ class AirflowDAG:
         self.default_args = default_args
         self.pipeline_name = pipeline_name
 
-    def generate_dags(self):
+    def run(self):
+        # get all dags
+        dag_bag = DagBag()
+        existing_dag_ids = set(dag_bag.dag_ids)
 
+        input_dag_ids = []
+
+        # for each recording, create a new DAG
         for idx, recording_row in self.recording_df.iterrows():
             subject_id = recording_row["Subject"]
             video_recording_id = recording_row["video_recording_id"]
             dag_id = f"{self.pipeline_name}_{subject_id}_{video_recording_id}"
             logger.info(f"Attempting to create DAG {dag_id}")
 
+            if dag_id in existing_dag_ids:
+                logger.info(f"DAG {dag_id} already exists. Skipping.")
+                continue
+
+            input_dag_ids.append(dag_id)
+
             with DAG(
                 dag_id=dag_id,
                 default_args=self.default_args,
-                description=f"DAG pipeline for {subject_id} {video_recording_id}",
-                schedule_interval=timedelta(days=7),
-                start_date=days_ago(1),
                 catchup=False,
-                is_paused_upon_creation=False,
-            ) as generated_dag:
-
+                schedule_interval=self.scheduling_interval,
+            ) as dag:
                 logger.info(f"Starting creation of DAG {dag_id}")
                 # define tasks
                 synced_cams = sync_cameras_task(
@@ -141,7 +142,7 @@ class AirflowDAG:
                     recording_row,
                     self.output_directory,
                     recheck_duration_s=60,
-                    maximum_wait_time_s=604800,
+                    maximum_wait_time_s=10000,
                 )
 
                 calibrated = calibrate_cameras_task(
@@ -201,12 +202,42 @@ class AirflowDAG:
 
                 # define dependencies
                 [synced_cams, calibrated, completed_2d] >> triangulated
-                synced_cams >> synced_ephys
                 triangulated >> gimbaled
                 gimbaled >> size_normed
                 size_normed >> arena_aligned
                 size_normed >> ego_aligned
                 [arena_aligned, ego_aligned] >> cont_feats
 
-            globals()[dag_id] = generated_dag
-            logger.info(f"DAG {dag_id} created")
+                globals()[dag_id] = dag
+
+                test_cycle(dag)
+                dag_bag.bag_dag(dag, root_dag=dag)
+
+                session = settings.Session()
+                try:
+                    if not session.query(DagModel).filter(DagModel.dag_id == dag_id).first():
+                        session.add(DagModel(dag_id=dag_id))
+                        session.commit()
+                except Exception as e:
+                    logger.error(f"Error committing to DagModel: {e}")
+                finally:
+                    session.close()
+
+                logger.info(f"DAG created and committed: {dag_id}")
+
+        print("\n--- DAG Registration Verification ---\n")
+        print("Input DAG IDs (should be created):", input_dag_ids)
+        print("Existing DAGs in dag_bag:", list(dag_bag.dag_ids))
+        print("\n--- End of Verification ---\n")
+
+        if dag_bag.dags:
+            for dag_id, dag in dag_bag.dags.items():
+                print(f"DAG ID: {dag_id}, DAG: {dag}")
+        else:
+            print("No dags found")
+
+
+def read_google_sheet(spreadsheet_url):
+    response = requests.get(spreadsheet_url)
+    recording_df = pd.read_csv(BytesIO(response.content))
+    return recording_df

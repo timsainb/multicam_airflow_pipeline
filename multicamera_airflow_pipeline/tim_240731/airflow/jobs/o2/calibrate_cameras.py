@@ -11,6 +11,7 @@ import time
 import yaml
 
 import logging
+logging.basicConfig(level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,8 @@ def calibrate_cameras(
     output_directory,
     config_file,
 ):
+    logger.info("Starting camera calibration airflow function")
+    logger.info(f"output_directory: {output_directory}")
     # load config
     config_file = Path(config_file)
     config = yaml.safe_load(open(config_file, "r"))
@@ -36,6 +39,8 @@ def calibrate_cameras(
     recording_directory = (
         Path(recording_row.calibration_location_on_o2) / recording_row.calibration_id
     )
+
+    assert recording_directory.exists(), f"Recording directory {recording_directory} does not exist"
 
     # where to save output
     output_directory_camera_calibration = (
@@ -46,6 +51,7 @@ def calibrate_cameras(
     remote_job_directory = job_directory / current_datetime_str
 
     # check if sync successfully completed
+    logger.info("Checking for calibration completion")
     if config["camera_calibration"]["recompute_completed"] == False:
         if check_calibration_completion(output_directory_camera_calibration):
             logger.info("Calibration completed, quitting")
@@ -60,7 +66,7 @@ def calibrate_cameras(
 
     # create the job runner
     runner = O2Runner(
-        job_name_prefix=f"{recording_row.video_recording_id}_calibration",
+        job_name_prefix=f"{recording_row.calibration_id}_calibration",
         remote_job_directory=remote_job_directory,
         conda_env="/n/groups/datta/tim_sainburg/conda_envs/peromoseq",
         o2_username=recording_row.username,

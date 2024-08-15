@@ -1,6 +1,6 @@
-# Multicamera Analysis pipeline with Airflow automation
+# Multicamera 3D Keypoint and MoSeq Pipeline with Airflow Automation
 
-This library is comprised of a series of analysis tasks for working with video data collected with our library [multicamera_acquisition](https://github.com/dattalab-6-cam/multicamera_acquisition). 
+This library is comprised of a series of analysis tasks for working with video data collected with the library [multicamera_acquisition](https://github.com/dattalab-6-cam/multicamera_acquisition). 
 
 The first version of the pipeline is stored in multicamera_airflow_pipeline.tim_240731. It comprises the following steps:
 - 2D keypoint prediction
@@ -14,12 +14,18 @@ The first version of the pipeline is stored in multicamera_airflow_pipeline.tim_
 - Sync ephys to camera frames
 - Spikesorting (kilosort4) ephys signals
 
-Because these steps comprise a complex dependency graph, we use Apache Airflow to manage the pipeline. Because these tasks are too computationally expensive to run on a single computer, all computations are run on the HMS data cluster O2. 
+Because these steps are computed in a somewhat a complex dependency graph, we use Apache Airflow to manage the pipeline. In addition, these tasks are too computationally expensive to run on a single computer, so we have methods to run tasks on both the HMS data cluster [O2](https://harvardmed.atlassian.net/wiki/spaces/O2/overview) and locally. O2 is a slurm cluster; in principal this code should work equally well on other slurm clusters. For example, we could use the [HMS Longwood cluster](https://harvardmed.atlassian.net/wiki/spaces/Longwood). 
 
-## How to use this code
+# Installation
+
+I reccomend creating a separate conda environment for different steps of the pipeline. E.g. a `pipeline` environment for general tasks, a `jax` environment for Gimbal & KPMS, an `mmdeploy` environment for 2D keypoint inference, a `spikesorting` environment for kilosort/spikesorting, and an `airflow` environment for running airflow. 
+
+The pipeline library can be installed in each of these environments with `pip install -v .e` after navigating to the repo directory. 
+
+# How to use this code
 There are three ways you can interact with this pipeline. 
-### 1. **Run python functions directly.** 
-For example, you can run the camera synchronization function directly in python by pointing it at the video directory. This outputs a `camera_sync.csv`. 
+## 1. **Run python functions directly.** 
+Each processing step can be run individually. For example, you can run the camera synchronization function directly in python by pointing it at the video directory. This outputs a `camera_sync.csv` in `output_directory`. 
 
 ```{python}
 from multicamera_airflow_pipeline.tim_240731.sync.sync_cameras import CameraSynchronizer
@@ -31,8 +37,10 @@ synchronizer = CameraSynchronizer(
 )
 synchronizer.run()
 ```
-### 2. **Run O2 jobs without Airflow.** 
-If you want to run a single step of the pipeline on O2, you can submit a job to O2 directly. Note that you need toset up SSH keys so that you can run commands on O2 before using this code to run an O2 job. For example, here is how we would run the camera sync as a direct O2 job: 
+## 2. **Run O2 jobs without Airflow.** 
+If you want to run a single step of the pipeline on O2, you can submit a job to O2 directly. To aid in job submission we have a class `O2Runner`, which submits the job for you and keeps track of its progress in the slurm cluster. 
+
+ Note that you need to set up SSH keys so that you can run commands on O2 before using this code to run an O2 job. For example, here is how we would run the camera sync as a direct O2 job: 
 ```{python}
 from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
 
@@ -73,10 +81,13 @@ runner.run()
 runner.run() # submits the job
 ```
 
-### 3. **Run O2 jobs with Airflow**. 
+### Setting up SSH keys
+To run jobs on o2, we need to SSH into `login.o2.rc.hms.harvard.edu` with python. To make this possible, we need to be able to login without entering our password interactively each time. Google "How to set up SSH keys" if you don't already know how to do this. 
+
+## 3. **Run O2 jobs with Airflow**. 
 This requires setting up an Airflow server which automatically maintains jobs for you. 
 
-## How Airflow works
+### How Airflow works
 1. Airflow runs a local computer (my desktop).
 2. Airflow reads which recordings to process from a [google sheet](https://docs.google.com/spreadsheets/d/1jACsUmxuJ9Une59qmvzZGc1qXezKhKzD1zho2sEfcrU/edit?gid=0#gid=0)
 3. For each recording, Airflow generates a DAG with all of the `tasks` it needs to run. 
@@ -84,7 +95,7 @@ This requires setting up an Airflow server which automatically maintains jobs fo
 5. Airflow automates the process of running each step in succession, and keeps track of which tasks have run successfully, and which have failed (and how they've failed.)
 
 
-## Creating a new pipeline
+### Creating a new pipeline
 The best way to create a new pipeline is to copy a pipeline folder (e.g."tim_240731"), modify/delete steps you don't need, and add in new steps. 
 
 ### Creating a new pipeline step
@@ -99,7 +110,7 @@ The Airflow DAG is represented by a class `AirflowDAG`. Calling AirflowDAG.run()
 
 You don't need to run `AirflowDAG.run()` yourself. Airflow automates this process by referencing it in Airflow's DAG folder (by default `~/airflow/dags`, see section below "Adding your Airflow job"). 
 
-## Setting up airflow on your local machine
+### Setting up airflow on your local machine
 
 First, install airflow on your local computer. 
 
@@ -180,43 +191,24 @@ To test, start `airflow scheduler` and `airflow webserver` and navigate to `http
 
 
 
-### Set up ssh keys
-To run jobs on o2, we need to SSH into `login.o2.rc.hms.harvard.edu` with python. To make this possible, we need to be able to login without entering our password interactively each time. 
 
-### Mount /n/groups/datta using sshfs
-To be able to check whether files are present, I mount `/n/groups/datta` locally using sshfs. In principle, this shouldn't be strictly necessary, but for my jobs I use sshfs to check whether files are present without having to SSH. In future updates, we will remove the need for sshfs. 
+### Mount /n/groups/datta using `sshfs`
+To be able to check whether files are present, I mount `/n/groups/datta` locally using `sshfs`. Specifically, I set up `sshfs` so that `/n/groups/datta/` is mounted in `/n/groups/datta` in my local computer. Google 'how to install sshfs' if you don't already have it installed. 
 
-Installing sshfs:
-[TODO]
+In principle, this shouldn't be strictly necessary, but for my jobs I use `sshfs` to check whether files are present without having to SSH. In future updates, we could remove the need for sshfs.
 
-##### Starting Airflow
+### Starting Airflow
 - To run airflow, in one terminal tab type: `airflow webserver`
     - alternatively, use tmux to run these in the background
 - In a second tab, type: `airflow scheduler`
 - Then navigate to `http://localhost:8080/` in your browser. 
 
-##### Adding your Airflow job
-Airflow DAGs are generated dynamically when new rows are added to your google sheet. 
+### Adding your Airflow job
+Airflow DAGs are generated dynamically each time you start the scheduler. Ideally, we would also want DAGs to be generated when new rows are added to your google sheet. In the example located in `airflow_examples/example_dag.py`, I create a second DAG, `refresh_pipeline_dag` which does this by 'touching' the file containing it. Airflow looks for when dag files have changed to rerun them, so everytime `refresh_pipeline_dag`, it will also re-read the google sheet. 
 
-If you want to run your own airflow, you can add `mydag.py` to `~/airflow/dags`, where `mydag.py` contains
 
-```{python}
-from multicamera_airflow_pipeline.tim_240731.airflow.dag import AirflowDAG
-
-# gets the dag
-airflow_dag = AirflowDAG(
-    spreadsheet_url="https://docs.google.com/spreadsheet/ccc?key=1jACsUmxuJ9Une59qmvzZGc1qXezKhKzD1zho2sEfcrU&output=csv&gid=0",
-)
-
-# runs the dag
-airflow_dag.run()
-
-```
-
-### TODO all
-- Get O2 version of tensorrt working...
-- create fully local DAG
-    - or, create DAG that utilizes local & o2 simultaneously?
+## TODO / future tasks
 - add longwood cluster to DAG
 - estimate unit locations (?)
-- update egocentric alignment, and any other scripts that write directly to memmap, rather than putting memmap in temp and copying when finished
+- add keypoint moseq
+- create a DAG that runs fully locally/without o2. 

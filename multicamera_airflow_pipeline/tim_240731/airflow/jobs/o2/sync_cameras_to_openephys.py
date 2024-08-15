@@ -11,6 +11,7 @@ import time
 import yaml
 
 import logging
+logging.basicConfig(level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +35,13 @@ def check_ephys_sync_completion(output_directory_ephys_sync, n_expected_streams)
     # TODO check if number of ephys streams matches expected
     ephys_streams_found = list(output_directory_ephys_sync.glob("*/ephys_alignment.mmap"))
     n_aligned_ephys_streams = len(ephys_streams_found)
-    if n_aligned_ephys_streams == n_expected_streams:
+    logger.info(f"Found {n_aligned_ephys_streams} streams")
+    if n_aligned_ephys_streams >= n_expected_streams:
         logger.info(f"Found the following streams: {n_aligned_ephys_streams}")
         for stream in ephys_streams_found:
             logger.info(stream)
         return True
+    
     return False
 
 

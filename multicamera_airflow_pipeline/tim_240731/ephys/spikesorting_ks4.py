@@ -88,7 +88,8 @@ class SpikeSorter:
             logger.info(f"Stream {stream_name} already sorted. Skipping.")
             return
 
-        (self.spikesorting_output_directory / stream_alphanumeric).mkdir(
+        stream_output_directory = self.spikesorting_output_directory / stream_alphanumeric
+        (stream_output_directory).mkdir(
             parents=True, exist_ok=True
         )
 
@@ -117,7 +118,7 @@ class SpikeSorter:
             ax.plot(sample_trace[:, 0])
             # save to spikesorting_output_directory
             plt.savefig(
-                self.spikesorting_output_directory / stream_alphanumeric / "sample_trace.png"
+                stream_output_directory / "sample_trace.png"
             )
             plt.close()
 
@@ -131,7 +132,7 @@ class SpikeSorter:
                 axs[i].set_title(label)
             # save to spikesorting_output_directory
             plt.savefig(
-                self.spikesorting_output_directory / stream_alphanumeric / "preprocessing.png"
+                stream_output_directory / "preprocessing.png"
             )
             plt.close()
 
@@ -160,13 +161,13 @@ class SpikeSorter:
             # run sort
             sorting = self.run_sort(rec, stream_alphanumeric)
             sorting.save(
-                folder=self.spikesorting_output_directory / stream_alphanumeric / "sort_result"
+                folder=stream_output_directory / "sort_result"
             )
 
             # analyze results
-            self.run_analysis(sorting, rec, stream_alphanumeric)
+            self.run_analysis(sorting, rec, stream_output_directory)
 
-    def run_analysis(self, sorting, rec, stream_alphanumeric):
+    def run_analysis(self, sorting, rec, stream_output_directory):
         # postprocessing
         analyzer = si.create_sorting_analyzer(
             sorting,
@@ -192,9 +193,14 @@ class SpikeSorter:
         analyzer.compute("spike_amplitudes", **job_kwargs)
         # estimate similarity
         analyzer.compute("template_similarity")
+
+        # if stream_output_directory / "analyzer" already exists, remove it
+        if (stream_output_directory / "analyzer").exists():
+            logger.info("Removing existing analyzer directory")
+            shutil.rmtree(stream_output_directory / "analyzer")
         # save analyzer results
         analyzer_saved = analyzer.save_as(
-            folder=self.spikesorting_output_directory / stream_alphanumeric / "analyzer",
+            folder=stream_output_directory / "analyzer",
             format="binary_folder",
         )
         # compute quality metrics
@@ -215,10 +221,16 @@ class SpikeSorter:
         keep_units = metrics.query(our_query)
         keep_unit_ids = keep_units.index.values
         logger.info(len(keep_unit_ids))
+
+        # if stream_output_directory / "analyzer_clean" already exists, remove it
+        if (stream_output_directory / "analyzer_clean").exists():
+            logger.info(f"Removing existing analyzer_clean directory")
+            shutil.rmtree(stream_output_directory / "analyzer_clean")  
+            
         # save a 'clean' version of the analyzer results
         analyzer_clean = analyzer.select_units(
             keep_unit_ids,
-            folder=self.spikesorting_output_directory / stream_alphanumeric / "analyzer_clean",
+            folder=stream_output_directory / "analyzer_clean",
             format="binary_folder",
         )
 

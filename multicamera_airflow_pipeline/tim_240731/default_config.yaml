@@ -16,7 +16,7 @@ camera_calibration:
   recompute_completed: False
 
 triangulation:
-  n_jobs: 5
+  n_jobs: 10
   keep_top_k: 3
   leave_one_out_center_threshold_mm: 50
   threshold_distance_from_parent_mm: 50
@@ -144,6 +144,9 @@ tensorrt_conversion:
   path_to_mmdetection_config: "/n/groups/datta/tim_sainburg/projects/mmdeploy/configs/mmdet/detection/detection_tensorrt_static-320x320.py"
   path_to_mmpose_config: "/n/groups/datta/tim_sainburg/projects/mmdeploy/configs/mmpose/pose-detection_simcc_tensorrt_dynamic-256x256.py"
 
+tensorrt_conversion_local:
+  conda_env: /home/peromoseq/anaconda3/envs/mmdeploy
+
 o2:
   sync_cameras:
     o2_memory: "16G"
@@ -172,15 +175,6 @@ o2:
     o2_qos: "gpuquad_qos"
     o2_gres: "gpu:1"
 
-  prediction_2d_tensorrt:
-    o2_memory: "64G"
-    o2_n_cpus: 6
-    o2_queue: "gpu_quad,gpu"
-    o2_runtime_multiplier: 20
-    o2_exclude: "compute-g-16-175,compute-g-16-176,compute-g-16-177,compute-g-16-194,compute-g-16-197"
-    o2_qos: "gpuquad_qos"
-    o2_gres: "gpu:1"
-
   spikesorting:
     o2_memory: "64G"
     o2_n_cpus: 20
@@ -201,7 +195,7 @@ o2:
   
   triangulation:
     o2_memory: "32G"
-    o2_n_cpus: 5
+    o2_n_cpus: 10
     o2_queue: "short,priority"
     o2_runtime_multiplier: 2
 
@@ -209,22 +203,22 @@ o2:
       o2_memory: "16G"
       o2_n_cpus: 10
       o2_queue: "short,priority"
-      o2_runtime_multiplier: 1
+      o2_runtime_multiplier: 3
 
   arena_alignment:
       o2_memory: "16G"
       o2_n_cpus: 1
       o2_queue: "short,priority"
-      o2_runtime_multiplier: 1
+      o2_runtime_multiplier: 2
 
   egocentric_alignment:
     o2_memory: "16G"
     o2_n_cpus: 1
     o2_queue: "short,priority"
-    o2_runtime_multiplier: 1
+    o2_runtime_multiplier: 2
 
   continuous_features:
     o2_memory: "16G"
     o2_n_cpus: 1
     o2_queue: "short,priority"
-    o2_runtime_multiplier: 1
+    o2_runtime_multiplier: 2

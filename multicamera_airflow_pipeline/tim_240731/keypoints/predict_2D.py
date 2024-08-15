@@ -23,6 +23,7 @@ from mmpose.utils import adapt_mmdet_pipeline
 from mmpose.apis import inference_topdown, init_model as init_pose_estimator
 from datetime import datetime
 import torch
+from datetime import datetime, timedelta
 
 # from mmdeploy_runtime import Detector, PoseDetector
 from multicamera_airflow_pipeline.tim_240731.skeletons.defaults import (
@@ -33,7 +34,7 @@ from multicamera_airflow_pipeline.tim_240731.skeletons.defaults import (
     keypoints_order,
     kpt_dict,
 )
-
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.info(f"Python interpreter binary location: {sys.executable}")
 
@@ -140,6 +141,8 @@ class Inferencer2D:
 
     def run(self):
 
+        logger.info(f"Running 2D inference over videos")
+
         if self.recompute_completed == False:
             if self.check_completed():
                 logger.info(f"Video processing completed, quitting")
@@ -154,37 +157,72 @@ class Inferencer2D:
 
         self.all_videos = list(self.recording_directory.glob("*.mp4"))
 
-        for video_path in tqdm(self.all_videos, desc="videos"):
+        logger.info(f"Processing {len(self.all_videos)} videos")
+        assert len(self.all_videos) > 0, f"No videos found in {self.recording_directory}"
+
+        for video_path in tqdm(self.all_videos, desc="processing videos"):
 
             output_h5_file = self.output_directory_predictions / f"{video_path.stem}.h5"
             if output_h5_file.exists() and not self.recompute_completed:
                 logger.info(f"Completed, skipping {video_path}")
                 continue
 
+            # if a log file exists, then this video is being processed by another job
+            #   read the current time from the log file, and if it has been more than 1 day, then reprocess
+            #   this accounts for the case where a job is killed and the log file is not deleted.
+            log_file = self.output_directory_predictions / f"{video_path.stem}.log"
+            if (self.recompute_completed == False) and (log_file.exists()):
+                with open(log_file, "r") as f:
+                    log_time = datetime.strptime(f.readline().strip(), "%Y-%m-%d %H:%M:%S.%f")
+                if datetime.now() - log_time < timedelta(hours=6):
+                    logger.info(f"Log file exists, skipping {log_file}")
+                    continue
+
             # initially save output to temp file
             with tempfile.NamedTemporaryFile(suffix=".h5", delete=False) as temp_h5_file:
                 temp_h5_path = temp_h5_file.name
 
-            predict_video(
-                video_path=video_path,
-                output_h5_file=temp_h5_path,
-                detector=self.detector,
-                pose_estimator=self.pose_estimator,
-                n_keypoints=self.n_keypoints,
-                detection_interval=self.detection_interval,
-                n_animals=self.n_animals,
-                use_motpy=self.use_motpy,
-                n_motpy_tracks=self.n_motpy_tracks,
-                use_tensorrt=self.use_tensorrt,
-                total_frames=self.expected_video_length_frames,
-            )
-            # when completed, move to output file
-            shutil.copy(temp_h5_path, output_h5_file)
-            os.remove(temp_h5_path)
+                # create a log with the name of this video, to indicate that it is being processed
+                #   the log will have a timestamp
+                with open(log_file, "w") as f:
+                    f.write(f"{datetime.now()}\n")
 
-        # save a file completed.log in self.output_directory_predictions to indicate completion
-        with open(self.output_directory_predictions / "completed.log", "w") as f:
-            f.write("completed")
+                predict_video(
+                    video_path=video_path,
+                    output_h5_file=temp_h5_path,
+                    detector=self.detector,
+                    pose_estimator=self.pose_estimator,
+                    n_keypoints=self.n_keypoints,
+                    detection_interval=self.detection_interval,
+                    n_animals=self.n_animals,
+                    use_motpy=self.use_motpy,
+                    n_motpy_tracks=self.n_motpy_tracks,
+                    use_tensorrt=self.use_tensorrt,
+                    total_frames=self.expected_video_length_frames,
+                )
+                # when completed, move to output file
+                shutil.copy(temp_h5_path, output_h5_file)
+                os.remove(temp_h5_path)
+        
+        
+        logger.info(f"Completed processing {len(self.all_videos)} videos")
+    
+        # if the number of videos matches the number of h5 files, then we are done
+        #  we do this in case there is a second job (e.g. local vs remote) working on the same data
+        n_h5_predictions = len(list(self.output_directory_predictions.glob("*.h5")))
+        logger.info(
+            f"Completed {n_h5_predictions} out of {len(self.all_videos)} videos"
+        )
+        if n_h5_predictions == len(self.all_videos):
+            # save a file completed.log in self.output_directory_predictions to indicate completion
+            with open(self.output_directory_predictions / "completed.log", "w") as f:
+                f.write("completed")
+            logger.info(
+                f"Completed {n_h5_predictions} out of {len(self.all_videos)} videos, written completed.log"
+            )
+        else:
+            logger.info("Not all videos completed, not writing completed.log")
+            
 
 
 def predict_video(

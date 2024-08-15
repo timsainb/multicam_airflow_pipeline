@@ -42,6 +42,7 @@ class O2Runner:
         o2_memory="16G",
         o2_time_limit="4:00:00",
         o2_queue="short",
+        modules_to_load=["gcc/9.2.0"],
         o2_exclude=None,  # "compute-g-16-175,compute-g-16-176,compute-g-16-177,compute-g-16-194,compute-g-16-197"
         o2_qos=None,  # "gpuquad_qos"
         o2_gres=None,  # "gpu:1"
@@ -60,7 +61,9 @@ class O2Runner:
         self.o2_exclude = o2_exclude
         self.o2_qos = o2_qos
         self.o2_gres = o2_gres
+        self.modules_to_load = modules_to_load
         self.do_not_submit = do_not_submit  # don't actually submit
+        self.slurm_job_id = None
 
         # determine a job id as the current timestamp
         self.job_datetime = datetime.now()
@@ -75,6 +78,17 @@ class O2Runner:
         self.ssh = None
 
         self.establish_ssh_connection()
+
+    def report_output_log(self):
+        # read the output log and write it to the logger
+
+        # check if the log file exists locally
+        if not self.output_log.exists():
+            return
+        else:
+            with self.output_log.open("r") as f:
+                for line in f:
+                    logger.info(line.strip())
 
     def run(self):
         # create the remote job directory
@@ -115,7 +129,9 @@ class O2Runner:
         if self.o2_gres is not None:
             slurm_script += f"#SBATCH --gres={self.o2_gres}\n"
         slurm_script += f"# Load the required modules\n"
-        slurm_script += f"module load gcc/9.2.0\n\n"
+        # slurm_script += f"module load gcc/9.2.0\n\n"
+        for modules_to_load in self.modules_to_load:
+            slurm_script += f"module load {modules_to_load}\n"
         slurm_script += f"source activate {self.conda_env}\n\n"
         slurm_script += f"python {self.python_script_loc}\n"
 
@@ -228,6 +244,16 @@ class O2Runner:
         logger.info(f"Job submitted successfully with job id: {self.slurm_job_id}")
         # self.close_ssh_connection()
 
+    def cancel(self):
+        if self.ssh is None:
+            raise ConnectionError("SSH connection is not established")
+        if not self.slurm_job_id:
+            logger.warning("No job id set, cannot cancel job")
+            return
+        cancel_command = f"scancel {self.slurm_job_id}"
+        stdin, stdout, stderr = self.ssh.exec_command(cancel_command)
+        logger.info(f"Job cancelled: {self.slurm_job_id}")
+    
     def check_job_success(self):
         # job success is specific to the job type
         raise NotImplementedError
@@ -261,21 +287,27 @@ class O2Runner:
             return False
         elif job_state == "FAILED":
             logger.info("The job failed.")
+            self.report_output_log()
             raise Exception("Job failed.")
         elif job_state == "CANCELLED":
             logger.info("The job was cancelled.")
+            self.report_output_log()
             raise Exception("Job failed.")
         elif job_state == "CANCELLED+":
             logger.info("The job was cancelled.")
+            self.report_output_log()
             raise Exception("Job failed.")
         elif job_state == "TIMEOUT":
             logger.info("The job has timed out.")
+            self.report_output_log()
             raise Exception("Job failed.")
         elif job_state == "NODE_FAIL":
             logger.info("The job terminated due to node failure.")
+            self.report_output_log()
             raise Exception("Job failed.")
         elif job_state == "OUT_OF_MEMORY":
             logger.info("The job was terminated due to exceeding memory limits.")
+            self.report_output_log()
             raise Exception("Job failed.")
         elif job_state == "COMPLETING":
             logger.info("The job is in the process of completing.")
@@ -288,9 +320,11 @@ class O2Runner:
             return False
         elif job_state == "SUSPENDED":
             logger.info("The job is suspended.")
+            self.report_output_log()
             raise Exception("Job failed.")
         elif job_state == "SPECIAL_EXIT":
             logger.info("The job terminated with a special exit state.")
+            self.report_output_log()
             raise Exception("Job failed.")
         else:
             logger.info(f"Unknown job state: {job_state}")

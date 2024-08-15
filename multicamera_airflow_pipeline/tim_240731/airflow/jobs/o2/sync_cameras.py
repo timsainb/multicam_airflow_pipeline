@@ -11,6 +11,7 @@ import time
 import yaml
 
 import logging
+logging.basicConfig(level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,13 @@ def sync_cameras(
     output_directory,
     config_file,
 ):
+    
+    # where the video data is located
+    recording_directory = (
+        Path(recording_row.video_location_on_o2) / recording_row.video_recording_id
+    )
+    assert recording_directory.exists(), f"Recording directory {recording_directory} does not exist"
+
     # load config
     config_file = Path(config_file)
     config = yaml.safe_load(open(config_file, "r"))
@@ -41,20 +49,17 @@ def sync_cameras(
     output_directory_camera_sync = (
         output_directory / "camera_sync" / recording_row.video_recording_id
     )
-    logger.info("Starting sync cameras job")
+    logger.info("Starting sync cameras")
 
     # check if sync is already completed
-    if config["sync_cameras"]["recompute_completed"]:
+    if config["sync_cameras"]["recompute_completed"] == False:
         if check_camera_sync_completion(output_directory_camera_sync):
             logger.info("Camera sync already completed, quitting")
             return
         else:
             logger.info("Camera sync not completed, running")
 
-    # where the video data is located
-    recording_directory = (
-        Path(recording_row.video_location_on_o2) / recording_row.video_recording_id
-    )
+    
 
     output_directory_camera_sync.mkdir(parents=True, exist_ok=True)
     current_datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
