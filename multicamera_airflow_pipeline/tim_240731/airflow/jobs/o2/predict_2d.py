@@ -11,6 +11,7 @@ import time
 import yaml
 
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,9 @@ def predict_2d(
         Path(recording_row.video_location_on_o2) / recording_row.video_recording_id
     )
 
-    assert recording_directory.exists(), f"Recording directory {recording_directory} does not exist"
+    assert (
+        recording_directory.exists()
+    ), f"Recording directory {recording_directory} does not exist"
 
     # where to save output
     output_directory_predictions = (
@@ -168,10 +171,22 @@ def predict_2d(
         status = runner.check_job_status()
         if status:
             break
+        if check_2d_completion(output_directory_predictions):
+            logger.info("2D prediction already completed successfully, quitting")
+            # cancels the current job
+            runner.cancel()
+            break
         time.sleep(60)
 
     # check if sync successfully completed
     if check_2d_completion(output_directory_predictions):
         logger.info("2D prediction completed successfully")
     else:
+        # if output_directory_predictions exists, remove all .log files in that folder
+        if output_directory_predictions.exists():
+            for file in output_directory_predictions.glob("*.log"):
+                # if the file is completed.log, don't remove it
+                if file.name == "completed.log":
+                    continue
+                file.unlink()
         raise ValueError("2D prediction did not complete successfully.")

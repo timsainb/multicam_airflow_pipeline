@@ -3,9 +3,7 @@ import pandas as pd
 import requests
 from io import BytesIO
 from pathlib import Path
-from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
 from datetime import datetime
-from airflow.utils.dag_cycle_tester import test_cycle
 import logging
 import sys
 
@@ -31,29 +29,32 @@ from multicamera_airflow_pipeline.tim_240731.airflow.jobs import await_2d_predic
 
 from airflow.decorators import task
 from airflow.models.dag import DAG
-from airflow.models import DagBag
-from airflow import settings
-from airflow.utils.dag_cycle_tester import test_cycle
-from airflow.models import DagModel
-from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
 
 logger = logging.getLogger(__name__)
 logger.info(f"Python interpreter binary location: {sys.executable}")
 
 
-sync_cameras_task = task(sync_cameras.sync_cameras)
-predict_2d_task = task(predict_2d.predict_2d)
-sync_cameras_to_openephys_task = task(sync_cameras_to_openephys.sync_cameras_to_openephys)
-calibrate_cameras_task = task(calibrate_cameras.calibrate_cameras)
-spikesorting_task = task(spikesorting.spikesorting)
-triangulation_task = task(triangulation.triangulation)
-run_gimbal_task = task(run_gimbal.run_gimbal)
-size_normalization_task = task(size_normalization.size_normalization)
-arena_alignment_task = task(arena_alignment.arena_alignment)
-egocentric_alignment_task = task(egocentric_alignment.egocentric_alignment)
-compute_continuous_features_task = task(compute_continuous_features.compute_continuous_features)
-await_2d_predictions_task = task(await_2d_predictions.await_2d_predictions)
+sync_cameras_task = task(sync_cameras.sync_cameras, pool="low_compute_pool")
+predict_2d_task = task(predict_2d.predict_2d, pool="low_compute_pool")
+sync_cameras_to_openephys_task = task(
+    sync_cameras_to_openephys.sync_cameras_to_openephys, pool="low_compute_pool"
+)
+calibrate_cameras_task = task(calibrate_cameras.calibrate_cameras, pool="low_compute_pool")
+spikesorting_task = task(spikesorting.spikesorting, pool="low_compute_pool")
+triangulation_task = task(triangulation.triangulation, pool="low_compute_pool")
+run_gimbal_task = task(run_gimbal.run_gimbal, pool="low_compute_pool")
+size_normalization_task = task(size_normalization.size_normalization, pool="low_compute_pool")
+arena_alignment_task = task(arena_alignment.arena_alignment, pool="low_compute_pool")
+egocentric_alignment_task = task(
+    egocentric_alignment.egocentric_alignment, pool="low_compute_pool"
+)
+compute_continuous_features_task = task(
+    compute_continuous_features.compute_continuous_features, pool="low_compute_pool"
+)
+await_2d_predictions_task = task(
+    await_2d_predictions.await_2d_predictions, pool="low_compute_pool"
+)
 predict_2d_local_task = task(predict_2d_local, pool="local_gpu_pool")
 
 

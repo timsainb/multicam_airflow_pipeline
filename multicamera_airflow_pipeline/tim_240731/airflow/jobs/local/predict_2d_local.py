@@ -204,4 +204,11 @@ def predict_2d_local(
     if check_2d_completion(output_directory_predictions):
         logger.info("2D prediction completed successfully")
     else:
+        # if output_directory_predictions exists, remove all .log files in that folder
+        if output_directory_predictions.exists():
+            for file in output_directory_predictions.glob("*.log"):
+                # if the file is completed.log, don't remove it
+                if file.name == "completed.log":
+                    continue
+                file.unlink()
         raise ValueError("2D prediction did not complete successfully.")
