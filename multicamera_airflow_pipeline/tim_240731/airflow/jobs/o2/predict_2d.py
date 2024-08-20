@@ -91,7 +91,7 @@ def predict_2d(
     runner = O2Runner(
         job_name_prefix=f"{recording_row.video_recording_id}_2d_predictions",
         remote_job_directory=remote_job_directory,
-        conda_env="/n/groups/datta/tim_sainburg/conda_envs/mmdeploy",
+        conda_env=config["o2"]["prediction_2d"]["conda_env"],
         o2_username=recording_row.username,
         o2_server="login.o2.rc.hms.harvard.edu",
         job_params=params,
@@ -126,14 +126,14 @@ def predict_2d(
 
         # grab sync cameras function
         from multicamera_airflow_pipeline.tim_240731.keypoints.predict_2D import Inferencer2D
-        camera_calibrator = Inferencer2D(
+        inferencer = Inferencer2D(
             recording_directory = params["recording_directory"],
             output_directory_predictions = params["output_directory_predictions"],
             expected_video_length_frames = params["expected_video_length_frames"],
             tensorrt_model_directory = params["tensorrt_model_directory"],
             **config["prediction_2d"]
         )
-        camera_calibrator.run()
+        inferencer.run()
         """
         )
     else:
@@ -149,14 +149,14 @@ def predict_2d(
 
         # grab sync cameras function
         from multicamera_airflow_pipeline.tim_240731.keypoints.predict_2D import Inferencer2D
-        camera_calibrator = Inferencer2D(
+        inferencer = Inferencer2D(
             recording_directory = params["recording_directory"],
             output_directory_predictions = params["output_directory_predictions"],
             expected_video_length_frames = params["expected_video_length_frames"],
             tensorrt_model_directory = params["tensorrt_model_directory"],
             **config["prediction_2d"]
         )
-        camera_calibrator.run()
+        inferencer.run()
         """
         )
 
@@ -190,3 +190,5 @@ def predict_2d(
                     continue
                 file.unlink()
         raise ValueError("2D prediction did not complete successfully.")
+
+    # TODO: Update this o2 version of predict local that deals with tensorrt failures the same was as the local version does

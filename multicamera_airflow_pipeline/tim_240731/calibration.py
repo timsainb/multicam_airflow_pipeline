@@ -128,7 +128,9 @@ class Calibrator:
         # make sure all videos are the same length
         logger.info(f"Checking video lengths")
         video_lengths = np.array([get_video_len(video_path) for video_path in self.video_paths])
-        assert np.all(video_lengths == video_lengths[0])
+        assert np.all(
+            video_lengths == video_lengths[0]
+        ), f"Videos are not the same length: {video_lengths}"
 
         n_frames = int(np.mean(video_lengths))
         n_vids = len(self.video_paths)

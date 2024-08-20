@@ -5,9 +5,12 @@ from datetime import datetime, timedelta
 import yaml
 import logging
 import sys
+import cv2
+
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.info(f"Python interpreter binary location: {sys.executable}")
+
 
 class CameraSynchronizer:
     def __init__(
@@ -69,7 +72,7 @@ class CameraSynchronizer:
         if np.any(np.diff(self.trigger_times) / self.isi_uS > 1.5):
             max_skip = np.max(np.diff(self.trigger_times) / self.isi_uS)
             logger.info(f"Skipped frames in microcontroller trigger: {max_skip}")
-            raise ValueError("Skipped frames in microcontroller trigger")
+            raise ValueError(f"Skipped frames in microcontroller trigger: {max_skip}")
 
         # get recording length in hours
         self.recording_length_hours = round(len(self.trigger_times) / self.samplerate / 60 / 60, 5)
@@ -93,21 +96,25 @@ class CameraSynchronizer:
         )
         self.cameras = self.metadata_csvs_df.camera.unique()
 
-    # def save_synced_data(self):
-    #
-    #    self.output_directory.parent.mkdir(parents=True, exist_ok=True)
-    #
-    #    # save the frame_df
-    #    self.frame_df.to_csv(self.output_directory / "frame_df.csv")
-    #
-    #    # save the metadata_csvs_df
-    #    # self.metadata_csvs_df.to_csv(
-    #    #    self.output_directory / "metadata_csvs_df.csv", index=False
-    #    # )
-    #
-    #    # save the config
-    #    # with open(self.output_directory / "config.yaml", "w") as file:
-    #    #    yaml.dump(self.config, file)
+    def check_if_correct_fps(self):
+        # checks if self.samplerate matches the samplerate of videos
+        logger.info("Checking if correct FPS")
+        # get the videos in recording directory
+        videos = list(self.recording_directory.glob("*.mp4"))
+        if len(videos) == 0:
+            raise FileNotFoundError("No videos found in the recording directory.")
+        # get the fps of the videos
+        fps = []
+        for video in videos:
+            cap = cv2.VideoCapture(str(video))
+            fps.append(cap.get(cv2.CAP_PROP_FPS))
+            cap.release()
+        # check if fps matches the expected fps, within 1 fps
+        if np.all(np.abs(np.array(fps) - self.samplerate) < 1):
+            return True
+        else:
+            logger.info(f"Expected FPS: {self.samplerate}, Found FPS: {fps}")
+            return False
 
     def run(self):
 
@@ -116,6 +123,8 @@ class CameraSynchronizer:
             if self.check_completed():
                 logger.info("Sync already completed")
                 return
+
+        assert self.check_if_correct_fps(), "Incorrect FPS detected"
 
         # load the config and triggerdata files
         logger.info("Loading video config, metadata, and triggerdata")

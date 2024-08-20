@@ -11,6 +11,7 @@ import time
 import yaml
 
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
@@ -104,7 +105,7 @@ def triangulation(
     runner = O2Runner(
         job_name_prefix=f"{recording_row.video_recording_id}_triangulation",
         remote_job_directory=remote_job_directory,
-        conda_env="/n/groups/datta/tim_sainburg/conda_envs/peromoseq",
+        conda_env=config["o2"]["triangulation"]["conda_env"],
         o2_username=recording_row.username,
         o2_server="login.o2.rc.hms.harvard.edu",
         job_params=params,

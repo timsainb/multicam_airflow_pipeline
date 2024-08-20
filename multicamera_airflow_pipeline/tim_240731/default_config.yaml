@@ -128,6 +128,7 @@ prediction_2d:
   n_motpy_tracks : 3
   use_tensorrt : True
   recompute_completed : False
+  ignore_log_files : True
 
 tensorrt_conversion:
   path_to_rmpose_config: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-05-04-21-35-13_305524/config.py"
@@ -145,7 +146,7 @@ tensorrt_conversion:
   path_to_mmpose_config: "/n/groups/datta/tim_sainburg/projects/mmdeploy/configs/mmpose/pose-detection_simcc_tensorrt_dynamic-256x256.py"
 
 tensorrt_conversion_local:
-  conda_env: /home/peromoseq/anaconda3/envs/mmdeploy
+  conda_env: "/home/peromoseq/anaconda3/envs/mmdeploy"
 
 o2:
   sync_cameras:
@@ -153,18 +154,21 @@ o2:
     o2_n_cpus: 1
     o2_queue: "short,priority"
     o2_runtime_multiplier: 1
+    conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
 
   sync_ephys:
     o2_memory: "16G"
     o2_n_cpus: 1
     o2_queue: "short,priority"
     o2_runtime_multiplier: 1
+    conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
 
   camera_calibration:
     o2_memory: "16G"
     o2_n_cpus: 10
     o2_queue: "short,priority"
     o2_time_limit: "2:00:00"
+    conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
 
   prediction_2d:
     o2_memory: "64G"
@@ -174,6 +178,7 @@ o2:
     o2_exclude: "compute-g-16-175,compute-g-16-176,compute-g-16-177,compute-g-16-194,compute-g-16-197"
     o2_qos: "gpuquad_qos"
     o2_gres: "gpu:1"
+    conda_env: "/n/groups/datta/tim_sainburg/conda_envs/mmdeploy"
 
   spikesorting:
     o2_memory: "64G"
@@ -183,6 +188,7 @@ o2:
     o2_exclude: "compute-g-16-175,compute-g-16-176,compute-g-16-177,compute-g-16-194,compute-g-16-197"
     o2_qos: "gpuquad_qos"
     o2_gres: "gpu:1"
+    conda_env: "/n/groups/datta/tim_sainburg/conda_envs/kilosort4"
 
   gimbal:
     o2_memory: "64G"
@@ -192,33 +198,39 @@ o2:
     o2_exclude: "compute-g-16-175,compute-g-16-176,compute-g-16-177,compute-g-16-194,compute-g-16-197"
     o2_qos: "gpuquad_qos"
     o2_gres: "gpu:1"
+    conda_env: "/n/groups/datta/tim_sainburg/conda_envs/kpms"
   
   triangulation:
     o2_memory: "32G"
     o2_n_cpus: 10
     o2_queue: "short,priority"
     o2_runtime_multiplier: 2
+    conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
 
   size_normalization:
       o2_memory: "16G"
       o2_n_cpus: 10
       o2_queue: "short,priority"
       o2_runtime_multiplier: 3
+      conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
 
   arena_alignment:
       o2_memory: "16G"
       o2_n_cpus: 1
       o2_queue: "short,priority"
       o2_runtime_multiplier: 2
+      conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
 
   egocentric_alignment:
     o2_memory: "16G"
     o2_n_cpus: 1
     o2_queue: "short,priority"
     o2_runtime_multiplier: 2
+    conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
 
   continuous_features:
     o2_memory: "16G"
     o2_n_cpus: 1
     o2_queue: "short,priority"
     o2_runtime_multiplier: 2
+    conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"

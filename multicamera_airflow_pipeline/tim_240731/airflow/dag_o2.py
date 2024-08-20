@@ -80,7 +80,7 @@ class AirflowDAG:
             "email_on_retry": False,
             "retries": 1,
             "is_paused_upon_creation": False,
-            "retry_delay": timedelta(minutes=5),
+            "retry_delay": timedelta(minutes=60),
         },
         schedule_interval=timedelta(days=1),
     ):
@@ -124,12 +124,14 @@ class AirflowDAG:
                     self.output_directory,
                     self.config_file,
                 )
-                predicted_2d = predict_2d_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
+                o2_2d_prediction = False
+                if o2_2d_prediction:
+                    predicted_2d = predict_2d_task(
+                        recording_row,
+                        self.job_directory,
+                        self.output_directory,
+                        self.config_file,
+                    )
 
                 predicted_2d_local = predict_2d_local_task(
                     recording_row,
@@ -201,6 +203,7 @@ class AirflowDAG:
                 )
 
                 # define dependencies
+                predicted_2d_local >> completed_2d
                 [synced_cams, calibrated, completed_2d] >> triangulated
                 synced_cams >> synced_ephys
                 triangulated >> gimbaled

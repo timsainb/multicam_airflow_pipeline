@@ -209,6 +209,52 @@ def predict_2d_local(
             for file in output_directory_predictions.glob("*.log"):
                 # if the file is completed.log, don't remove it
                 if file.name == "completed.log":
+                    logger.info(f"Removing completed.log")
                     continue
                 file.unlink()
-        raise ValueError("2D prediction did not complete successfully.")
+
+        # try re-running without tensorrt
+        if config["prediction_2d"]["use_tensorrt"]:
+            logger.info("Not all files completed, trying again without tensorrt")
+            runner.python_script = textwrap.dedent(
+                f"""
+            # load params
+            import yaml
+            import sys
+            print(sys.executable)
+            params_file = "{runner.job_directory / f"{runner.job_name}.params.yaml"}"
+            config_file = "{config_file.as_posix()}"
+
+            params = yaml.safe_load(open(params_file, 'r'))
+            config = yaml.safe_load(open(config_file, 'r'))
+            config["prediction_2d"]["use_tensorrt"] = False
+
+            # grab sync cameras function
+            from multicamera_airflow_pipeline.tim_240731.keypoints.predict_2D import Inferencer2D
+            camera_calibrator = Inferencer2D(
+                recording_directory = params["recording_directory"],
+                output_directory_predictions = params["output_directory_predictions"],
+                expected_video_length_frames = params["expected_video_length_frames"],
+                tensorrt_model_directory = params["tensorrt_model_directory"],
+                **config["prediction_2d"]
+            )
+            camera_calibrator.run()
+            """
+            )
+            runner.run()
+            # check if sync successfully completed
+            if check_2d_completion(output_directory_predictions):
+                logger.info("2D prediction completed successfully")
+            else:
+                # if output_directory_predictions exists, remove all .log files in that folder
+                if output_directory_predictions.exists():
+                    for file in output_directory_predictions.glob("*.log"):
+                        # if the file is completed.log, don't remove it
+                        if file.name == "completed.log":
+                            continue
+                        file.unlink()
+                raise ValueError("2D prediction did not complete successfully.")
+        else:
+            raise ValueError(
+                "2D prediction did not complete successfully, not retrying without tensorrt."
+            )

@@ -11,6 +11,7 @@ import time
 import yaml
 
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ def check_ephys_sync_completion(output_directory_ephys_sync, n_expected_streams)
         for stream in ephys_streams_found:
             logger.info(stream)
         return True
-    
+
     return False
 
 
@@ -113,7 +114,7 @@ def sync_cameras_to_openephys(
     runner = O2Runner(
         job_name_prefix=f"{recording_row.video_recording_id}_ephys_sync",
         remote_job_directory=remote_job_directory,
-        conda_env="/n/groups/datta/tim_sainburg/conda_envs/peromoseq",
+        conda_env=config["o2"]["sync_ephys"]["conda_env"],
         o2_username=recording_row.username,
         o2_server="login.o2.rc.hms.harvard.edu",
         job_params=params,
