@@ -128,7 +128,7 @@ Start the airflow web server in a separate tab or tmux
 ```
 airflow webserver
 ```
-Finally, navigate to `http://localhost:8080/` in your browser. 
+Finally, navigate to `http://localhost:8080/` in your browser to check that it works. You won't be able to log in until you create a user profile (see below).
 
 
 By default, Airflow does not allow for parallelization. To setup parallelization, we need to switch to `postgresql` from `SQLite`. 
@@ -144,7 +144,7 @@ sudo systemctl start postgresql
 sudo systemctl enable postgresql
 ```
 
-setup the database
+Setup the database. This first command will open an interactive session within your current one.
 ```
 sudo -i -u postgres
 psql
@@ -155,12 +155,13 @@ GRANT ALL PRIVILEGES ON DATABASE airflow_db TO airflow_user;
 GRANT ALL ON SCHEMA public TO airflow_user;
 \q
 ```
-Then reload
+
+Now exit the interactive session with Ctrl-D or equivalent. Then reload postgres:
 ```
 sudo systemctl reload postgresql
 ```
 
-update the config from
+Update the airflow config (usually at `~/airflow/airflow.cfg`) from
 ```
 #sql_alchemy_conn = sqlite:////home/peromoseq/airflow/airflow.db
 ```
@@ -178,6 +179,8 @@ airflow users create \
     --lastname sainburg \
     --email timsainb@gmail.com
 ```
+
+You may have to install psycopg2: `pip install psycopg2-binary`
 
 Finally, we need to switch airflow config setting from `SequentialExecutor` in `airflow.cfg` to allow for parallelization.
 
