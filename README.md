@@ -196,7 +196,10 @@ To test, start `airflow scheduler` and `airflow webserver` and navigate to `http
 
 
 ### Mount /n/groups/datta using `sshfs`
-To be able to check whether files are present, I mount `/n/groups/datta` locally using `sshfs`. Specifically, I set up `sshfs` so that `/n/groups/datta/` is mounted in `/n/groups/datta` in my local computer. Google 'how to install sshfs' if you don't already have it installed. 
+First, set up your ssh key to O2. To be able to check whether files are present, I mount `/n/groups/datta` locally using `sshfs`. Specifically, I set up `sshfs` so that `/n/groups/datta/` is mounted in `/n/groups/datta` in my local computer. (You will probably need to create your own local /n directory.) Google 'how to install sshfs' if you don't already have it installed. The command should look something like:
+```
+sshfs jop9552@transfer.rc.hms.harvard.edu:/n/groups/datta /n/groups/datta/
+```
 
 In principle, this shouldn't be strictly necessary, but for my jobs I use `sshfs` to check whether files are present without having to SSH. In future updates, we could remove the need for sshfs.
 
