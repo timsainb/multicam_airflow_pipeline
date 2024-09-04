@@ -62,7 +62,7 @@ def arena_alignment(
             logger.info("arena_alignment completed, quitting")
             return
         else:
-            logger.info("arena_alignment incomplete, starting")
+            logger.info("arena_alignment not complete, starting")
 
     predictions_3d_file = list(
         (output_directory / "size_normalization" / recording_row.video_recording_id).glob(
@@ -86,7 +86,7 @@ def arena_alignment(
     runner = O2Runner(
         job_name_prefix=f"{recording_row.video_recording_id}_arena_alignment",
         remote_job_directory=remote_job_directory,
-        conda_env=["o2"]["arena_alignment"]["conda_env"],
+        conda_env=config["o2"]["arena_alignment"]["conda_env"],
         o2_username=recording_row.username,
         o2_server="login.o2.rc.hms.harvard.edu",
         job_params=params,
