@@ -112,10 +112,29 @@ You don't need to run `AirflowDAG.run()` yourself. Airflow automates this proces
 
 ### Setting up airflow on your local machine
 
-First, install airflow on your local computer. 
+#### For Windows, first install WSL ####
 
+If you're not on a windows machine, skip these steps!
+* First install WSL: https://learn.microsoft.com/en-us/windows/wsl/install
+  * Username and pw can be the lab defaults
+  * Once installed, you can access this wsl instance just by typing the distro name into the Windows cmd prompt, eg `ubuntu` is the default.
+* Then install miniconda within WSL:
 ```
-# create an airflow conda environment
+mkdir -p ~/miniconda3
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
+bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
+rm ~/miniconda3/miniconda.sh
+```
+
+Great, now continue following the linux instructions below!
+
+#### Airflow install for Linux users
+
+* Make a new conda env for airflow: `conda create -n airflow python=3.12` (or whatever python version you want)
+* Then install airflow: see [here](https://airflow.apache.org/docs/apache-airflow/stable/installation/installing-from-pypi.html) for the latest instructions, below was up to date at time of this writing:
+```
+conda activate airflow
+pip install "apache-airflow[celery]==2.10.1" --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.1/constraints-3.8.txt"
 ```
 
 You can check that the Airflow install worked with the following steps:
@@ -130,6 +149,7 @@ airflow webserver
 ```
 Finally, navigate to `http://localhost:8080/` in your browser to check that it works. You won't be able to log in until you create a user profile (see below).
 
+Now close those two airflow instances, we are going to make some changes.
 
 By default, Airflow does not allow for parallelization. To setup parallelization, we need to switch to `postgresql` from `SQLite`. 
 
