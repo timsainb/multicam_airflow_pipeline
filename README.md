@@ -148,7 +148,7 @@ Start the airflow web server in a separate tab or tmux
 airflow webserver
 ```
 Finally, navigate to `http://localhost:8080/` in your browser to check that it works. You won't be able to log in until you create a user profile (see below).
-
+***
 By default, Airflow does not allow for parallelization. To setup parallelization, we need to switch to `postgresql` from `SQLite`. 
 
 First, quit `airflow scheduler` and `airflow webserver`.
@@ -212,14 +212,18 @@ Now airflow is parallelizable.
 
 To test, start `airflow scheduler` and `airflow webserver` and navigate to `http://localhost:8080/`
 
-
-
-
 ### Mount /n/groups/datta using `sshfs`
-First, set up your ssh key to O2. To be able to check whether files are present, I mount `/n/groups/datta` locally using `sshfs`. Specifically, I set up `sshfs` so that `/n/groups/datta/` is mounted in `/n/groups/datta` in my local computer. (You will probably need to create your own local /n directory.) Google 'how to install sshfs' if you don't already have it installed. The command should look something like:
+* First, set up your ssh key to O2 if you haven't generated an ssh key on your computer before: run `ssh-keygen` and just hit enter to put the file in teh default location / have no passphrase. (FYI we're still within WSL if you're on Windows.)
+* Then run `ssh-id-copy [USERNAME]@transfer.rc.hms.harvard.edu` and enter your O2 password to set up an easy ssh connection to O2 that won't require you to re-type your password each time.
+* Install sshfs with `sudo apt install sshfs`
+* Decide where you're going to mount the O2 files. We currently make a folder called `/n/groups/datta` locally; you'll probably need to use sudo and change the permissions to have read/write access there. In principle you can mount it anywhere but you'll need to update the airflow code.
+* The command to mount O2 with sshfs should then look something like:
 ```
-sshfs jop9552@transfer.rc.hms.harvard.edu:/n/groups/datta /n/groups/datta/
+sshfs [USERNAME]@transfer.rc.hms.harvard.edu:/n/groups/datta /n/groups/datta/
 ```
+Then if you run `ls -la /n/groups/datta` you should see all our folders!
+* To unmount run: `fusermount3 -u /n/groups/datta`
+
 
 In principle, this shouldn't be strictly necessary, but for my jobs I use `sshfs` to check whether files are present without having to SSH. In future updates, we could remove the need for sshfs.
 
