@@ -155,6 +155,14 @@ tensorrt_conversion_local:
   conda_env: "/home/peromoseq/anaconda3/envs/mmdeploy"
 
 o2:
+
+  thermistor_proc:
+    o2_memory: "16G"
+    o2_n_cpus: 1
+    o2_queue: "short"
+    o2_runtime_multiplier: 0.2
+    conda_env: "/home/jop9552/miniconda3/envs/dataPy_NWB2"
+
   sync_cameras:
     o2_memory: "16G"
     o2_n_cpus: 1

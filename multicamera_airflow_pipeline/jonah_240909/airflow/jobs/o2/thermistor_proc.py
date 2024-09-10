@@ -80,6 +80,7 @@ def process_thermistor_data(
     )
 
     # create the job runner
+    logging.info("Initializing O2 runner")
     runner = O2Runner(
         job_name_prefix=f"{recording_row.video_recording_id}_thermistor_proc",
         remote_job_directory=remote_job_directory,
