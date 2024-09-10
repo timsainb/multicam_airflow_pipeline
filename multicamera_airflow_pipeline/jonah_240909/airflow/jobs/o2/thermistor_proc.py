@@ -52,7 +52,7 @@ def process_thermistor_data(
     output_directory_thermistor = (
         output_directory / "thermistor_processing" / recording_row.video_recording_id
     )
-    logger.info("Starting thermistor processing")
+    logger.info("Creating thermistor processing o2 runner")
 
     # TODO: could check if already completed, but it's a light analysis and the inner func also checks if it's done.
 
