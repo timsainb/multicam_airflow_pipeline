@@ -15,6 +15,7 @@ import logging
 import tempfile
 import shutil
 import os
+
 logging.basicConfig(level=logging.DEBUG)
 print("Python interpreter binary location:", sys.executable)
 
@@ -74,7 +75,7 @@ class Triangulator:
         self.output_directory_triangulation = Path(output_directory_triangulation)
         self.camera_sync_file = Path(camera_sync_file)
         self.camera_calibration_directory = Path(camera_calibration_directory)
-        self.expected_frames_per_video = expected_frames_per_video
+        self.expected_frames_per_video = int(expected_frames_per_video)
         self.n_jobs = n_jobs
         self.keep_top_k = keep_top_k
         self.perform_top_k_filtering = perform_top_k_filtering
@@ -182,8 +183,8 @@ class Triangulator:
     def triangulate_chunk(self, start_frame, chunk_i):
         # determine the end frame
         end_frame = np.min([self.n_frames, start_frame + self.expected_frames_per_video])
-        chunk_start = start_frame
-        chunk_end = end_frame
+        chunk_start = int(start_frame)
+        chunk_end = int(end_frame)
 
         # for each camera, populate the confidences and positions from hdf5
         confidences_2d_chunk = np.zeros(
@@ -514,7 +515,7 @@ def same_frames_for_all_cameras(df):
         return True
     else:
         # Print the cameras with different frames
-        logger.info('Different frames for cameras')
+        logger.info("Different frames for cameras")
         for camera, frames in camera_frames.items():
             logger.info(f"{camera}: {frames}")
         return False

@@ -322,6 +322,8 @@ def predict_video(
             video.release()
             video = cv2.VideoCapture(local_video_path)
 
+        total_frames = int(total_frames)
+        n_animals = int(n_animals)
         # allocate arrays
         detection_coords = np.zeros((total_frames, n_animals, 4))
         detection_conf = np.zeros((total_frames, n_animals, 1))

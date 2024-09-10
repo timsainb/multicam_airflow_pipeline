@@ -253,7 +253,7 @@ class O2Runner:
         cancel_command = f"scancel {self.slurm_job_id}"
         stdin, stdout, stderr = self.ssh.exec_command(cancel_command)
         logger.info(f"Job cancelled: {self.slurm_job_id}")
-    
+
     def check_job_success(self):
         # job success is specific to the job type
         raise NotImplementedError
@@ -324,6 +324,10 @@ class O2Runner:
             raise Exception("Job failed.")
         elif job_state == "SPECIAL_EXIT":
             logger.info("The job terminated with a special exit state.")
+            self.report_output_log()
+            raise Exception("Job failed.")
+        elif "OUT_OF_ME" in job_state:
+            logger.info("The job was terminated due to exceeding memory limits.")
             self.report_output_log()
             raise Exception("Job failed.")
         else:
