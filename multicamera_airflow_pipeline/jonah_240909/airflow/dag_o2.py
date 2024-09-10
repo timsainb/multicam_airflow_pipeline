@@ -19,6 +19,7 @@ from multicamera_airflow_pipeline.tim_240731.airflow.jobs.o2 import (
     arena_alignment,
     egocentric_alignment,
     compute_continuous_features,
+    thermistor_proc,
 )
 
 from multicamera_airflow_pipeline.tim_240731.airflow.jobs.local.predict_2d_local import (
@@ -35,6 +36,7 @@ logger = logging.getLogger(__name__)
 logger.info(f"Python interpreter binary location: {sys.executable}")
 
 
+thermistor_proc_task = task(thermistor_proc.thermistor_proc, pool="low_compute_pool")
 sync_cameras_task = task(sync_cameras.sync_cameras, pool="low_compute_pool")
 predict_2d_task = task(predict_2d.predict_2d, pool="low_compute_pool")
 sync_cameras_to_openephys_task = task(
@@ -67,15 +69,15 @@ def read_google_sheet(spreadsheet_url):
 class AirflowDAG:
     def __init__(
         self,
-        pipeline_name: str = "tim_240731",
-        config_file: str = "/n/groups/datta/tim_sainburg/projects/multicamera_airflow_pipeline/multicamera_airflow_pipeline/tim_240731/default_config.yaml",
-        output_directory: str = "/n/groups/datta/kpts_pipeline/tim_240731/results",
-        job_directory: str = "/n/groups/datta/kpts_pipeline/tim_240731/jobs",
-        spreadsheet_url: str = "https://docs.google.com/spreadsheet/ccc?key=1jACsUmxuJ9Une59qmvzZGc1qXezKhKzD1zho2sEfcrU&output=csv&gid=0",
+        pipeline_name: str = "jonah_240909",
+        config_file: str = "/n/groups/datta/Jonah/Local_code_groups/6cam_repos/multicam_airflow_pipeline/multicamera_airflow_pipeline/jonah_240909/default_config.yaml",
+        output_directory: str = "/n/groups/datta/kpts_pipeline/jonah_240909/results",
+        job_directory: str = "/n/groups/datta/kpts_pipeline/jonah_240909/jobs",
+        spreadsheet_url: str = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQu5URq-BmUvTkN3ri_awkkq6rap_hsofnzATjjO4C1hAzlLLJSYLmZ8OCCyvtYmW-e8BQem1n4TZSV/pub?gid=0&single=true&output=csv",
         default_args={
             "owner": "airflow",
             "depends_on_past": False,
-            "start_date": datetime(2024, 1, 1),
+            "start_date": datetime.now(),
             "email_on_failure": False,
             "email_on_retry": False,
             "retries": 1,
@@ -118,99 +120,107 @@ class AirflowDAG:
 
                 logger.info(f"Starting creation of DAG {dag_id}")
                 # define tasks
-                synced_cams = sync_cameras_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
-                o2_2d_prediction = False
-                if o2_2d_prediction:
-                    predicted_2d = predict_2d_task(
-                        recording_row,
-                        self.job_directory,
-                        self.output_directory,
-                        self.config_file,
-                    )
 
-                predicted_2d_local = predict_2d_local_task(
+                thermistor = thermistor_proc_task(
                     recording_row,
                     self.job_directory,
                     self.output_directory,
                     self.config_file,
                 )
 
-                completed_2d = await_2d_predictions_task(
-                    recording_row,
-                    self.output_directory,
-                    recheck_duration_s=60,
-                    maximum_wait_time_s=604800,
-                )
+                # synced_cams = sync_cameras_task(
+                #     recording_row,
+                #     self.job_directory,
+                #     self.output_directory,
+                #     self.config_file,
+                # )
+                # o2_2d_prediction = False
+                # if o2_2d_prediction:
+                #     predicted_2d = predict_2d_task(
+                #         recording_row,
+                #         self.job_directory,
+                #         self.output_directory,
+                #         self.config_file,
+                #     )
 
-                calibrated = calibrate_cameras_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
-                synced_ephys = sync_cameras_to_openephys_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
-                sorted_spikes = spikesorting_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
-                triangulated = triangulation_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
-                gimbaled = run_gimbal_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
-                size_normed = size_normalization_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
-                arena_aligned = arena_alignment_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
-                ego_aligned = egocentric_alignment_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
-                cont_feats = compute_continuous_features_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
+                # predicted_2d_local = predict_2d_local_task(
+                #     recording_row,
+                #     self.job_directory,
+                #     self.output_directory,
+                #     self.config_file,
+                # )
 
-                # define dependencies
-                predicted_2d_local >> completed_2d
-                [synced_cams, calibrated, completed_2d] >> triangulated
-                synced_cams >> synced_ephys
-                triangulated >> gimbaled
-                gimbaled >> size_normed
-                size_normed >> arena_aligned
-                size_normed >> ego_aligned
-                [arena_aligned, ego_aligned] >> cont_feats
+                # completed_2d = await_2d_predictions_task(
+                #     recording_row,
+                #     self.output_directory,
+                #     recheck_duration_s=60,
+                #     maximum_wait_time_s=604800,
+                # )
+
+                # calibrated = calibrate_cameras_task(
+                #     recording_row,
+                #     self.job_directory,
+                #     self.output_directory,
+                #     self.config_file,
+                # )
+                # synced_ephys = sync_cameras_to_openephys_task(
+                #     recording_row,
+                #     self.job_directory,
+                #     self.output_directory,
+                #     self.config_file,
+                # )
+                # sorted_spikes = spikesorting_task(
+                #     recording_row,
+                #     self.job_directory,
+                #     self.output_directory,
+                #     self.config_file,
+                # )
+                # triangulated = triangulation_task(
+                #     recording_row,
+                #     self.job_directory,
+                #     self.output_directory,
+                #     self.config_file,
+                # )
+                # gimbaled = run_gimbal_task(
+                #     recording_row,
+                #     self.job_directory,
+                #     self.output_directory,
+                #     self.config_file,
+                # )
+                # size_normed = size_normalization_task(
+                #     recording_row,
+                #     self.job_directory,
+                #     self.output_directory,
+                #     self.config_file,
+                # )
+                # arena_aligned = arena_alignment_task(
+                #     recording_row,
+                #     self.job_directory,
+                #     self.output_directory,
+                #     self.config_file,
+                # )
+                # ego_aligned = egocentric_alignment_task(
+                #     recording_row,
+                #     self.job_directory,
+                #     self.output_directory,
+                #     self.config_file,
+                # )
+                # cont_feats = compute_continuous_features_task(
+                #     recording_row,
+                #     self.job_directory,
+                #     self.output_directory,
+                #     self.config_file,
+                # )
+
+                # # define dependencies
+                # predicted_2d_local >> completed_2d
+                # [synced_cams, calibrated, completed_2d] >> triangulated
+                # synced_cams >> synced_ephys
+                # triangulated >> gimbaled
+                # gimbaled >> size_normed
+                # size_normed >> arena_aligned
+                # size_normed >> ego_aligned
+                # [arena_aligned, ego_aligned] >> cont_feats
 
             globals()[dag_id] = generated_dag
             logger.info(f"DAG {dag_id} created")

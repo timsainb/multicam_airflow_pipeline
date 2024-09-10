@@ -1,3 +1,9 @@
+thermistor_proc:
+  starting_sniff_min_prominence: 0.1
+  fs_interp: 500
+  thermistor_file_pattern: "*.txt"
+  thermistor_file_exclude_patterns: ["xxx", "metadata"]
+
 sync_cameras:
   trigger_pin: 2
   recompute_completed: False
