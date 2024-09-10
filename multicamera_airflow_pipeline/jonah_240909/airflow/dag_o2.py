@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 logger.info(f"Python interpreter binary location: {sys.executable}")
 
 
-thermistor_proc_task = task(thermistor_proc.thermistor_proc, pool="low_compute_pool")
+thermistor_proc_task = task(thermistor_proc.process_thermistor_data, pool="low_compute_pool")
 sync_cameras_task = task(sync_cameras.sync_cameras, pool="low_compute_pool")
 predict_2d_task = task(predict_2d.predict_2d, pool="low_compute_pool")
 sync_cameras_to_openephys_task = task(
