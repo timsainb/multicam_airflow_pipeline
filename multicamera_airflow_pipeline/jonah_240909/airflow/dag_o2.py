@@ -7,7 +7,7 @@ from datetime import datetime
 import logging
 import sys
 
-from multicamera_airflow_pipeline.tim_240731.airflow.jobs.o2 import (
+from multicamera_airflow_pipeline.jonah_240909.airflow.jobs.o2 import (
     sync_cameras,
     sync_cameras_to_openephys,
     predict_2d,
