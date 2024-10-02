@@ -7,14 +7,9 @@ from airflow.utils.dates import days_ago
 from multicamera_airflow_pipeline.jonah_240909.airflow.dag_o2 import AirflowDAG
 
 # gets the dag
-# airflow_dag = AirflowDAG(
-    # spreadsheet_url="https://docs.google.com/spreadsheet/ccc?key=1jACsUmxuJ9Une59qmvzZGc1qXezKhKzD1zho2sEfcrU&output=csv&gid=0",
-    # config_file="/n/groups/datta/tim_sainburg/projects/multicamera_airflow_pipeline/multicamera_airflow_pipeline/tim_240731/default_config.yaml",
-# )
-
 airflow_dag = AirflowDAG(
-    spreadsheet_url="https://docs.google.com/spreadsheets/d/e/2PACX-1vQu5URq-BmUvTkN3ri_awkkq6rap_hsofnzATjjO4C1hAzlLLJSYLmZ8OCCyvtYmW-e8BQem1n4TZSV/pub?gid=0&single=true&output=csv",
-    config_file="/n/groups/datta/Jonah/Local_code_groups/6cam_repos/multicam_airflow_pipeline/multicamera_airflow_pipeline/jonah_240909/default_config.yaml",
+    spreadsheet_url="https://docs.google.com/spreadsheet/ccc?key=1jACsUmxuJ9Une59qmvzZGc1qXezKhKzD1zho2sEfcrU&output=csv&gid=0",
+    config_file="/n/groups/datta/tim_sainburg/projects/multicamera_airflow_pipeline/multicamera_airflow_pipeline/tim_240731/default_config.yaml",
 )
 
 # runs the dag
