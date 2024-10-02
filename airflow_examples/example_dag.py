@@ -4,7 +4,7 @@ from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.utils.dates import days_ago
 
-from multicamera_airflow_pipeline.jonah_240909.airflow.dag_o2 import AirflowDAG
+from multicamera_airflow_pipeline.tim_240731.airflow.dag_o2 import AirflowDAG
 
 # gets the dag
 airflow_dag = AirflowDAG(
