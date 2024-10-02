@@ -124,21 +124,20 @@ class AirflowDAG:
                     self.output_directory,
                     self.config_file,
                 )
-                o2_2d_prediction = False
-                if o2_2d_prediction:
+                if recording_row["use_local"] == "FALSE":
                     predicted_2d = predict_2d_task(
                         recording_row,
                         self.job_directory,
                         self.output_directory,
                         self.config_file,
                     )
-
-                predicted_2d_local = predict_2d_local_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
+                else:
+                    predicted_2d = predict_2d_local_task(
+                        recording_row,
+                        self.job_directory,
+                        self.output_directory,
+                        self.config_file,
+                    )
 
                 completed_2d = await_2d_predictions_task(
                     recording_row,
@@ -203,7 +202,7 @@ class AirflowDAG:
                 )
 
                 # define dependencies
-                predicted_2d_local >> completed_2d
+                predicted_2d >> completed_2d
                 [synced_cams, calibrated, completed_2d] >> triangulated
                 synced_cams >> synced_ephys
                 triangulated >> gimbaled

@@ -231,10 +231,18 @@ In principle, this shouldn't be strictly necessary, but for my jobs I use `sshfs
 - To run airflow, in one terminal tab type: `airflow webserver`
     - alternatively, use tmux to run these in the background
 - In a second tab, type: `airflow scheduler`
-- Then navigate to `http://localhost:8080/` in your browser. 
+- Then navigate to `http://localhost:8080/` in your browser.
+
 
 ### Adding your Airflow job
-Airflow DAGs are generated dynamically each time you start the scheduler. Ideally, we would also want DAGs to be generated when new rows are added to your google sheet. In the example located in `airflow_examples/example_dag.py`, I create a second DAG, `refresh_pipeline_dag` which does this by 'touching' the file containing it. Airflow looks for when dag files have changed to rerun them, so everytime `refresh_pipeline_dag`, it will also re-read the google sheet. 
+* At this point, if airflow is working, it may be nice to set `load_examples = False` in `airflow.cfg` so that the GUI isn't clogged with examples.
+
+Airflow DAGs are generated dynamically each time you start the scheduler. Ideally, we would also want DAGs to be generated when new rows are added to your google sheet. In the example located in `airflow_examples/example_dag.py`, I create a second DAG, `refresh_pipeline_dag` which does this by 'touching' the file containing it. Airflow looks for when dag files have changed to rerun them, so everytime `refresh_pipeline_dag`, it will also re-read the google sheet.
+
+To get Airflow to actually find this, you need to copy it to Airflow's dag directory, or change it's default. Airflow looks in `~/airflow/dags` and for files with "dag" in the name for DAGs.
+
+Since that means the example dag is outside the code directory, you will have to `pip install -e .` your code in your airflow conda env. Alternatively, you could probably change the airflow dag dir to point to your copy of the code. You may also have to run `pip install -r requirements.txt` in the airflow env if your requirements don't install correctly. 
+
 
 
 ## TODO / future tasks
