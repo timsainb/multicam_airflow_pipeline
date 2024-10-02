@@ -152,9 +152,12 @@ class CameraSynchronizer:
             camera_frame_idx = 0
             pulse_frame_idx = 0
             for metadata_csv in camera_metadata_csvs.csv_loc.values:
+                
                 # get the hardware timestamp from the metadata csv
-                camera_hw_timestamps = np.loadtxt(metadata_csv, delimiter=",", skiprows=1)[:, 1]
-                camera_hw_timestamps /= 1e3  # Convert from nanoseconds to microseconds
+                # camera_hw_timestamps = np.loadtxt(metadata_csv, delimiter=",", skiprows=1)[:, 1]
+                metadata_df = pd.read_csv(metadata_csv, header=0)
+                camera_hw_timestamps = metadata_df["frame_timestamp"].values
+                camera_hw_timestamps = camera_hw_timestamps / 1e3  # Convert from nanoseconds to microseconds
 
                 # estimate the dropped frames
                 frame_indexes, dropped_frames = estimate_frame_indexes(camera_hw_timestamps)
