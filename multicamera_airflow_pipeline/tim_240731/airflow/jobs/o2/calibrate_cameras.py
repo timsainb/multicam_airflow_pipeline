@@ -71,7 +71,7 @@ def calibrate_cameras(
     runner = O2Runner(
         job_name_prefix=f"{recording_row.calibration_id}_calibration",
         remote_job_directory=remote_job_directory,
-        conda_env=["o2"]["camera_calibration"]["conda_env"],
+        conda_env=config["o2"]["camera_calibration"]["conda_env"],
         o2_username=recording_row.username,
         o2_server="login.o2.rc.hms.harvard.edu",
         job_params=params,
