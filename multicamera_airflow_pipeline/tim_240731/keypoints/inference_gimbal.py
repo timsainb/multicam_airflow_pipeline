@@ -30,6 +30,7 @@ from tensorflow_probability.substrates.jax.distributions import VonMisesFisher a
 from gimbal.fit import em_step
 from jax import lax, jit
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 from jax.lib import xla_bridge
@@ -104,6 +105,7 @@ class GimbalInferencer:
         distance_from_median_thresh=50,
         kpt_dict=default_kpt_dict,
         recompute_completed=False,
+        plot_progress=False,
         testing=False,
     ):
         self.gimbal_output_directory = Path(gimbal_output_directory)
@@ -128,6 +130,7 @@ class GimbalInferencer:
         self.kpt_dict = kpt_dict
         self.recompute_completed = recompute_completed
         self.testing = testing
+        self.plot_progress = plot_progress
 
         if self.testing:
             logger.warning("Testing mode is on. Only running on first 10k samples.")
