@@ -124,7 +124,8 @@ class AirflowDAG:
                     self.output_directory,
                     self.config_file,
                 )
-                if recording_row["use_local"] == "FALSE":
+                if not recording_row["use_local"]:
+                    logger.info("Using O2 for 2D prediction")
                     predicted_2d = predict_2d_task(
                         recording_row,
                         self.job_directory,
@@ -132,6 +133,7 @@ class AirflowDAG:
                         self.config_file,
                     )
                 else:
+                    logger.info("Using local for 2D prediction")
                     predicted_2d = predict_2d_local_task(
                         recording_row,
                         self.job_directory,
