@@ -115,6 +115,7 @@ class RTMModelConverter:
             model_conversion_script = "source $(conda info --base)/etc/profile.d/conda.sh;\n"
             model_conversion_script += f"conda activate {self.conda_env};\n"
         else:
+            model_conversion_script = f"module load gcc/9.2.0\n"
             model_conversion_script = f"module load cuda/11.7\n"
             model_conversion_script += f"source activate {self.conda_env};\n"
         # # Set PYTHONPATH to include the directory where sitecustomize.py is located
@@ -175,12 +176,14 @@ class RTMModelConverter:
             file.write(sitecustomize_script)
 
         # warning: this will switch out current cuda module
+        model_conversion_script = ""
         if self.is_local:
             # local (at least on peromoseq) needs to source conda first
-            model_conversion_script = "source $(conda info --base)/etc/profile.d/conda.sh;\n"
+            model_conversion_script += "source $(conda info --base)/etc/profile.d/conda.sh;\n"
             model_conversion_script += f"conda activate {self.conda_env};\n"
         else:
-            model_conversion_script = f"module load cuda/11.7\n"
+            model_conversion_script += f"module load gcc/9.2.0\n"
+            model_conversion_script += f"module load cuda/11.7\n"
             model_conversion_script += f"source activate {self.conda_env};\n"
         # # Set PYTHONPATH to include the directory where sitecustomize.py is located
         model_conversion_script += f"export PYTHONPATH={temp_dir}:$PYTHONPATH;\n"
@@ -198,6 +201,9 @@ class RTMModelConverter:
         model_conversion_script += f" --dump-info"  # dump sdk info
 
         # Run the model conversion script
+        print("Running model conversion script:")
+        print(model_conversion_script)
+
         process = subprocess.Popen(
             model_conversion_script,
             shell=True,
@@ -205,10 +211,13 @@ class RTMModelConverter:
             stderr=subprocess.STDOUT,
             bufsize=1,
             universal_newlines=True,
-            executable="/bin/bash" if self.is_local else None,
+            # executable="/bin/bash" if self.is_local else None,
+            executable="/bin/bash",
         )
 
         # Read output line by line as it is produced
+        print("================================================================================")
+        print("Output:")
         for line in process.stdout:
             print(line, end="")
 
