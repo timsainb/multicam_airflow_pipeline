@@ -148,6 +148,11 @@ tensorrt_conversion:
 tensorrt_conversion_local:
   conda_env: "/home/peromoseq/anaconda3/envs/mmdeploy"
 
+validation_videos:
+  recompute_completed: False
+  max_frames: 7200  # 1 min @ 120 fps
+
+
 o2:
   sync_cameras:
     o2_memory: "8G"
@@ -233,4 +238,11 @@ o2:
     o2_n_cpus: 1
     o2_queue: "short,priority"
     o2_runtime_multiplier: 0.1
+    conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
+
+  validation_videos:
+    o2_memory: "8G"
+    o2_n_cpus: 1
+    o2_queue: "short,priority"
+    o2_time_limit: "1:30:00"  # writes ~30 fps, so if we default to 1 min @ 120 fps -> 7200 fr -> 4 min x 6 vids x 2 types of vid = ~ 1 hr
     conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
