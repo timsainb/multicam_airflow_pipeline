@@ -1,6 +1,7 @@
 import logging
 import os
 from pathlib import Path
+import subprocess
 import sys
 
 import cv2
@@ -17,9 +18,8 @@ from multicamera_airflow_pipeline.tim_240731.skeletons.defaults import (
     dataset_info,
 )
 
-print("Python interpreter binary location:", sys.executable)
+logging.info("Python interpreter binary location:", sys.executable)
 logger = logging.getLogger(__name__)
-
 
 class KeypointVideoCreator:
     def __init__(
@@ -309,7 +309,7 @@ class KeypointVideoCreator:
         self.create_2D_keypoint_conf_plots()
         self.create_2D_keypoint_videos()
         self.crop_and_stitch_2D_keypoint_videos()
-
+        
         # Load the triangulated 3D predictions
         self.load_triang_prediction_filenames()
         self.load_triang_reproj_predictions()
@@ -318,10 +318,73 @@ class KeypointVideoCreator:
         self.create_reproj_triang_keypoint_videos()
         self.crop_and_stitch_reproj_triang_keypoint_videos()
 
+        # Compress all the videos
+        # (Runs at ~10 fps --> adds another 7200 frames / 10 fps = 720s = 12 minutes x 6 vids = ~1 hr)
+        logging.info("Compressing videos")
+        for vid in self.output_directory_keypoint_vids.glob("*.mp4"):
+            compressed_vid = vid.with_name(vid.stem + "_compressed.mp4")
+            compress_vid_via_ffmpeg(
+                vid,
+                compressed_vid,
+                crf=23,
+                preset="fast",  # runs at ~10 fps (which is kinda slow) but compresses ~10x which is nice for speeding up subsequent downloads of the QC vids.
+                recompute_completed=self.recompute_completed,
+            )
+        
+            # Remove the original
+            os.remove(vid)
+
+            # Rename the compressed file
+            compressed_vid.rename(vid)
+        
         # Mark as completed
+        logging.info("Marking as completed")
         self.set_completed()
 
         return
+
+
+def compress_vid_via_ffmpeg(input_vid, output_vid, crf=23, preset="fast", recompute_completed=False):
+    """
+    Compresses a video file using ffmpeg.
+
+    Parameters:
+    -----------
+    input_vid : Path
+        Path to the input video file.
+
+    output_vid : Path
+        Path to the output video file.
+
+    crf : int
+        Constant Rate Factor (CRF) value for the video compression. Lower values result in higher quality videos.
+
+    preset : str
+        Preset for the video compression. Options are: 'ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium',
+    """
+    
+    # Check if the output file already exists
+    if output_vid.exists() and not recompute_completed:
+        logging.info(f"Output file already exists: {output_vid}")
+        return
+
+    # Run the ffmpeg command for video compression
+    command = [
+        "/n/app/ffmpeg/3.3.3/ffmpeg",
+        "-y",
+        "-i",
+        str(input_vid),
+        "-c:v",
+        "libx264",
+        "-crf",
+        str(crf),
+        "-preset",
+        preset,
+        str(output_vid),
+    ]
+    logging.info(f"Compressing video: {input_vid}")
+    subprocess.Popen(command).wait()
+    return
 
 
 def generate_keypoint_video(
@@ -429,7 +492,7 @@ def generate_keypoint_video(
     elif max_frames is not None:
         total_frames = np.min([max_frames, total_frames])
 
-    print(f"Total frames: {total_frames}")
+    logging.info(f"Total frames: {total_frames}")
 
     with tqdm(total=total_frames, desc="Processing frames") as pbar:
         while cap.isOpened():
@@ -492,6 +555,8 @@ def generate_keypoint_video(
                     ):
                         x1, y1 = keypoint_coords[frame_idx, kp1_id]
                         x2, y2 = keypoint_coords[frame_idx, kp2_id]
+                        if np.isnan(x1) or np.isnan(y1) or np.isnan(x2) or np.isnan(y2):
+                            continue
                         kp1_conf = keypoint_conf[frame_idx, kp1_id]
                         kp2_conf = keypoint_conf[frame_idx, kp2_id]
                         color = tuple(link_info["color"])
@@ -540,7 +605,7 @@ def generate_keypoint_video(
     # Release video objects
     cap.release()
     out.release()
-    print(f"Video saved to: {output_path}")
+    logging.info(f"Video saved to: {output_path}")
     return
 
 
@@ -622,7 +687,7 @@ def crop_and_stich_vids(
 
     # Open the output video
     out_vid_path = output_directory / Path(stitched_vid_name)
-    print(f"Output video path: {out_vid_path}")
+    logging.info(f"Output video path: {out_vid_path}")
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     output_frame_size = (bbox_crop_size[0] * len(out_vids), bbox_crop_size[1])
     out = cv2.VideoWriter(str(out_vid_path), fourcc, 30, output_frame_size)
