@@ -15,7 +15,6 @@ from tqdm.auto import tqdm
 # load skeleton
 from multicamera_airflow_pipeline.tim_240731.skeletons.defaults import (
     dataset_info,
-    parents_dict,
 )
 
 print("Python interpreter binary location:", sys.executable)
@@ -26,6 +25,7 @@ class KeypointVideoCreator:
     def __init__(
         self,
         predictions_2d_directory,
+        predictions_triang_directory,
         camera_calibration_directory,
         raw_video_directory,
         output_directory_keypoint_vids,
@@ -39,6 +39,9 @@ class KeypointVideoCreator:
         -----------
         predictions_2d_directory : str
             Path to the directory containing the 2D keypoint predictions.
+
+        predictions_triang_directory : str
+            Path to the directory containing the triangulated 3D keypoint predictions.
 
         camera_calibration_directory : str
             Path to the directory containing the camera calibration files.
@@ -56,6 +59,7 @@ class KeypointVideoCreator:
             If True, the keypoint videos will be recreated even if they already exist in the output directory.
         """
         self.predictions_2d_directory = Path(predictions_2d_directory)
+        self.predictions_triang_directory = Path(predictions_triang_directory)
         self.camera_calibration_directory = Path(camera_calibration_directory)
         self.raw_video_directory = Path(raw_video_directory)
         self.output_directory_keypoint_vids = Path(output_directory_keypoint_vids)
@@ -91,6 +95,20 @@ class KeypointVideoCreator:
         ) as f:
             f.write("Keypoint vids completed")
 
+    def load_video_filenames(self):
+        # grab all the video files
+        self.video_files = {}
+        for camera in self.cameras:
+            self.video_files[camera] = list(
+                self.raw_video_directory.glob(f"*{camera}*.mp4")
+            )
+            if len(self.video_files[camera]) == 0:
+                raise ValueError(f"No video files found for camera {camera}")
+            elif len(self.video_files[camera]) > 1:
+                raise ValueError(f"Multiple video files found for camera {camera}")
+            else:
+                self.video_files[camera] = self.video_files[camera][0]
+
     def load_2D_prediction_filenames(self):
         # grab all the predictions 2D h5 files
         predictions_2d_files = list(self.predictions_2d_directory.glob("*.h5"))
@@ -99,22 +117,22 @@ class KeypointVideoCreator:
         self.recording_predictions = pd.DataFrame(
             {"camera": cam, "frame": frame, "file": predictions_2d_files}
         )
+        # Filter out cameras not present in data
         self.recording_predictions = self.recording_predictions[
             self.recording_predictions.camera.isin(self.cameras)
         ]
 
-    def load_video_filenames(self):
-        # grab all the video files
-        self.video_files = {}
-        for camera in self.cameras:
-            self.video_files[camera] = list(self.raw_video_directory.glob(f"*{camera}*.mp4"))
-            if len(self.video_files[camera]) == 0:
-                raise ValueError(f"No video files found for camera {camera}")
-            elif len(self.video_files[camera]) > 1:
-                raise ValueError(f"Multiple video files found for camera {camera}")
-            else:
-                self.video_files[camera] = self.video_files[camera][0]
-        
+    def load_triang_prediction_filenames(self):
+        predictions_triang_files = list(
+            self.predictions_triang_directory.glob("predictions_3d*.mmap")
+        )
+        confidences_triang_files = list(
+            self.predictions_triang_directory.glob("confidences_3d*.mmap")
+        )
+        assert len(predictions_triang_files) == len(confidences_triang_files) == 1
+        self.triang_predictions_file = predictions_triang_files[0]
+        self.triang_confidences_file = confidences_triang_files[0]
+
     def load_2D_predictions(self):
         # Load up to max_frames of 2D predictions
         self.predictions_2d = {}
@@ -125,13 +143,19 @@ class KeypointVideoCreator:
             frames_loaded = 0
             while frames_loaded < self.max_frames:
                 # Get the next file
-                next_file = self.recording_predictions[
-                    (self.recording_predictions.camera == camera)
-                    & (self.recording_predictions.frame >= frames_loaded)
-                ].sort_values("frame").iloc[0]
+                next_file = (
+                    self.recording_predictions[
+                        (self.recording_predictions.camera == camera)
+                        & (self.recording_predictions.frame >= frames_loaded)
+                    ]
+                    .sort_values("frame")
+                    .iloc[0]
+                )
                 # Load the predictions
                 with h5py.File(next_file.file, "r") as file:
-                    _keypoint_coords = np.array(file["keypoint_coords"])  # shape: (n_frames, n_keypoints, 2)
+                    _keypoint_coords = np.array(
+                        file["keypoint_coords"]
+                    )  # shape: (n_frames, n_keypoints, 2)
                     _keypoint_conf = np.array(file["keypoint_conf"])
                     _detection_coords = np.array(file["detection_coords"])
                 _keypoint_conf[_keypoint_conf > 1] = 1
@@ -146,18 +170,47 @@ class KeypointVideoCreator:
                 "detection_coords": np.concatenate(detection_coords, axis=0).squeeze(),
             }
 
+    def load_triang_reproj_predictions(self):
+        # Load max_frames of 2D reprojections
+        self.predictions_triang = {}
+        keypoint_coords = load_memmap_from_filename(self.triang_predictions_file)  # shape: (n_frames, n_keypoints, 3)
+        keypoint_conf = load_memmap_from_filename(self.triang_confidences_file)
+        for iCamera, camera in enumerate(self.cameras):
+            these_coords_3D = keypoint_coords[:self.max_frames, :, :]
+            these_confs = keypoint_conf[:self.max_frames, :]
+
+            # Reproject the coords into 2D
+            extrinsics = self.all_extrinsics[iCamera]
+            camera_matrix, dist_coefs = self.all_intrinsics[iCamera]
+            these_coords_2D = mcc.project_points(
+                these_coords_3D,
+                extrinsics=extrinsics,
+                camera_matrix=camera_matrix,
+                dist_coefs=dist_coefs,
+            )
+            self.predictions_triang[camera] = {
+                "keypoint_coords": these_coords_2D,
+                "keypoint_conf": these_confs,
+            }
+
     def create_2D_keypoint_conf_plots(self):
         # import pdb; pdb.set_trace()
-        all_kp_confs = np.stack([self.predictions_2d[cam]["keypoint_conf"] for cam in self.cameras], axis=-1)
+        all_kp_confs = np.stack(
+            [self.predictions_2d[cam]["keypoint_conf"] for cam in self.cameras], axis=-1
+        )
         max_kp_confs_per_frame = np.max(all_kp_confs, axis=-1)
         plt.figure()
-        plt.matshow(max_kp_confs_per_frame.T, aspect="auto", cmap="PiYG", vmin=0, vmax=1)
+        plt.matshow(
+            max_kp_confs_per_frame.T, aspect="auto", cmap="PiYG", vmin=0, vmax=1
+        )
         cbar = plt.colorbar()
         cbar.set_label("Max keypoint confidence")
         cbar.set_ticks([0, 0.5, 1])
         plt.ylabel("Keypoint")
         plt.xlabel("Frame")
-        plt.title(f"Max keypoint confidences across cameras\n{self.recording_predictions.iloc[0].file.stem}")
+        plt.title(
+            f"Max keypoint confidences across cameras\n{self.recording_predictions.iloc[0].file.stem}"
+        )
         plt.savefig(self.output_directory_keypoint_vids / "max_keypoint_confs.png")
         plt.close()
 
@@ -179,14 +232,62 @@ class KeypointVideoCreator:
                 max_frames=self.max_frames,
             )
 
+    def create_reproj_triang_keypoint_videos(self):
+        for camera in self.cameras:
+            keypoint_coords = self.predictions_triang[camera]["keypoint_coords"]
+            keypoint_conf = self.predictions_triang[camera]["keypoint_conf"]
+
+            generate_keypoint_video(
+                output_directory=self.output_directory_keypoint_vids,
+                video_path=self.video_files[camera],
+                keypoint_coords=keypoint_coords,
+                keypoint_conf=keypoint_conf,
+                keypoint_info=dataset_info["keypoint_info"],
+                vid_suffix="with_triang_keypoints",
+                skeleton_info=dataset_info["skeleton_info"],
+                max_frames=self.max_frames,
+            )
+
+    def crop_and_stitch_2D_keypoint_videos(self):
+        bbox_coords_by_camera = {
+            camera: self.predictions_2d[camera]["detection_coords"]
+            for camera in self.cameras
+        }
+        crop_and_stich_vids(
+            output_directory=self.output_directory_keypoint_vids,
+            single_vid_suffix="with_2D_keypoints",  # Suffix to identify the single videos to be stitched together
+            bbox_coords_by_camera=bbox_coords_by_camera,
+            bbox_crop_size=(400, 400),
+            max_frames=self.max_frames,
+        )
+
+    def crop_and_stitch_reproj_triang_keypoint_videos(self):
+        # Use the centroid of the triang'd kps as the center of the bbox
+        detection_coords_by_camera = {}
+        for camera in self.cameras:
+            reproj_coords = self.predictions_triang[camera]["keypoint_coords"]
+            centroids = np.nanmean(reproj_coords, axis=1)
+            centroids = nan_to_preceding(centroids)
+            detection_coords_by_camera[camera] = centroids
+
+        crop_and_stich_vids(
+            output_directory=self.output_directory_keypoint_vids,
+            single_vid_suffix="with_triang_keypoints",  # Suffix to identify the single videos to be stitched together
+            detection_coords_by_camera=detection_coords_by_camera,
+            bbox_crop_size=(400, 400),
+            max_frames=self.max_frames,
+        )
 
     def run(self):
-        
         # Check if already completed
         if not self.recompute_completed:
             if self.check_if_validation_vids_exist():
                 logger.info("Triangulation already exists")
                 return
+
+        # Create output dir if needed
+        if not self.output_directory_keypoint_vids.exists():
+            self.output_directory_keypoint_vids.mkdir(parents=True)
 
         # Load calibration + camera info
         self.all_extrinsics, self.all_intrinsics, camera_names = mcc.load_calibration(
@@ -207,30 +308,20 @@ class KeypointVideoCreator:
         # Create the 2D keypoint videos
         self.create_2D_keypoint_conf_plots()
         self.create_2D_keypoint_videos()
+        self.crop_and_stitch_2D_keypoint_videos()
 
         # Load the triangulated 3D predictions
+        self.load_triang_prediction_filenames()
+        self.load_triang_reproj_predictions()
 
-        # # Load calibration info
-        # self.all_extrinsics, self.all_intrinsics, camera_names = mcc.load_calibration(
-        #     self.camera_calibration_directory,
-        #     load_format="jarvis",
-        # )
-        # self.cameras = camera_names
-        # self.n_cameras = len(self.cameras)
-        # logging.info(f"\t n_cameras {self.n_cameras}")
-        # assert self.n_cameras > 0, "No cameras found"
+        # Create the triangulated keypoint videos
+        self.create_reproj_triang_keypoint_videos()
+        self.crop_and_stitch_reproj_triang_keypoint_videos()
 
-
-
-        # Crop and stitch the 2D vids into one long one
-
-        # Reproject the triangulated kps to 2D
-
-        # Create the triang keypoint videos
-
-        # Crop and stitch the triang vids into one long one
-        
+        # Mark as completed
         self.set_completed()
+
+        return
 
 
 def generate_keypoint_video(
@@ -587,7 +678,9 @@ def load_memmap_from_filename(filename):
     parts = filename.name.rsplit(".", 4)  # Split the filename into parts
     dtype_str = parts[-3]  # Get the dtype part of the filename
     shape_str = parts[-2]  # Get the shape part of the filename
-    shape = tuple(map(int, shape_str.split("x")))  # Convert shape string to a tuple of integers
+    shape = tuple(
+        map(int, shape_str.split("x"))
+    )  # Convert shape string to a tuple of integers
     # Load the array using numpy memmap
     array = np.memmap(filename, dtype=dtype_str, mode="r", shape=shape)
     return array
