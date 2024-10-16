@@ -244,5 +244,5 @@ o2:
     o2_memory: "8G"
     o2_n_cpus: 1
     o2_queue: "short,priority"
-    o2_time_limit: "1:30:00"  # writes ~30 fps, so if we default to 1 min @ 120 fps -> 7200 fr -> 4 min x 6 vids x 2 types of vid = ~ 1 hr
+    o2_time_limit: "2:30:00"  # writes ~30 fps, so if we default to 1 min @ 120 fps -> 7200 fr -> 4 min x 6 vids x 2 types of vid = ~ 1 hr, + compressing takes ~1 hr more.
     conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
