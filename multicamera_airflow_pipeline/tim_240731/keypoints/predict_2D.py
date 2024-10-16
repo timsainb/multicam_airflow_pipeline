@@ -186,6 +186,9 @@ class Inferencer2D:
                     #    to the next video without crashing the entire process
                     python_script = textwrap.dedent(
                         f"""
+                    import sys
+                    # print python executable
+                    print(sys.executable)
                     from multicamera_airflow_pipeline.tim_240731.keypoints.predict_2D import predict_video
                     predict_video(
                         video_path="{video_path.as_posix()}",
@@ -205,9 +208,14 @@ class Inferencer2D:
                         total_frames={self.expected_video_length_frames},
                     )"""
                     )
+                    # print(sys.executable)
                     # Run the process and capture the output
+                    command = f"module load cuda/11.7 && {sys.executable} -c '{python_script}'"
                     process = subprocess.Popen(
-                        ["python", "-c", python_script],
+                        # ["python", "-c", python_script],
+                        # [sys.executable, "-c", python_script],
+                        command,
+                        shell=True,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         text=True,

@@ -34,6 +34,7 @@ class Calibrator:
         video_output_directory=None,
         fps=None,
         recompute_completed=False,
+        cameras_to_use=None,
     ):
         self.calibration_video_directory = Path(calibration_video_directory)
         self.camera_names = camera_names
@@ -47,6 +48,9 @@ class Calibrator:
         self.n_jobs = n_jobs
         self.video_output_directory = video_output_directory
         self.recompute_completed = recompute_completed
+        # if there are simultaneous recordings with different subsets of cameras
+        #  (e.g. to and bottom chronic rigs, specific which cameras we're currently using)
+        self.cameras_to_use = cameras_to_use
 
     def check_if_completed(self):
         # check if calibration has already been completed
