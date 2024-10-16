@@ -12,6 +12,5 @@ scipy
 scikit-learn
 tqdm
 matplotlib
-logging
 opencv-python
 -e .

@@ -206,6 +206,9 @@ class RTMModelConverter:
         model_conversion_script += f" --dump-info"  # dump sdk info
 
         # Run the model conversion script
+        print("Running model conversion script:")
+        print(model_conversion_script)
+
         process = subprocess.Popen(
             model_conversion_script,
             shell=True,
@@ -213,10 +216,13 @@ class RTMModelConverter:
             stderr=subprocess.STDOUT,
             bufsize=1,
             universal_newlines=True,
+            # executable="/bin/bash" if self.is_local else None,
             executable="/bin/bash",
         )
 
         # Read output line by line as it is produced
+        print("================================================================================")
+        print("Output:")
         for line in process.stdout:
             print(line, end="")
 
