@@ -32,7 +32,7 @@ size_normalization:
   rigid_bones: False
   root_joint: "spine_base"
   subsample: null
-  n_jobs: 10
+  n_jobs: 5
   plot_steps: True
   recompute_completed: False
 
@@ -208,8 +208,8 @@ o2:
     conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
 
   size_normalization:
-      o2_memory: "16G"
-      o2_n_cpus: 10
+      o2_memory: "32G"
+      o2_n_cpus: 5
       o2_queue: "short,priority"
       o2_runtime_multiplier: 3
       conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"

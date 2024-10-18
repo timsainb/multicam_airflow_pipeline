@@ -1,3 +1,9 @@
+from pathlib import Path
+from datetime import datetime, timedelta
+from airflow import DAG
+from airflow.operators.python_operator import PythonOperator
+from airflow.utils.dates import days_ago
+
 from multicamera_airflow_pipeline.tim_240731.airflow.dag_o2 import AirflowDAG
 
 # gets the dag
@@ -8,12 +14,6 @@ airflow_dag = AirflowDAG(
 
 # runs the dag
 airflow_dag.generate_dags()
-
-from pathlib import Path
-from datetime import datetime, timedelta
-from airflow import DAG
-from airflow.operators.python_operator import PythonOperator
-from airflow.utils.dates import days_ago
 
 # Path to this script
 dag_file_path = Path(__file__)

@@ -57,16 +57,39 @@ class CameraSynchronizer:
             raise FileNotFoundError("No recording config file found in the recording directory.")
         self.config = yaml.load(config_file.read_text(), Loader=yaml.FullLoader)
 
+    def estimate_total_frames_from_metadata(self):
+        first_camera = self.metadata_csvs_df.iloc[0].camera
+        camera_metadata_csvs = self.metadata_csvs_df[
+                self.metadata_csvs_df.camera == first_camera
+            ].sort_values(by="frame")
+        final_metadata_csv = camera_metadata_csvs.iloc[-1].csv_loc
+        final_metadata_df = pd.read_csv(final_metadata_csv, header=0)
+        final_start_frame = camera_metadata_csvs.iloc[0].frame
+        final_n_frames = final_metadata_df.shape[0]
+        total_frames = final_start_frame + final_n_frames
+        return total_frames
+
+    def make_fictive_triggerdata(self):
+        self.trigger_times = np.round(
+            np.arange(
+                0, self.estimate_total_frames_from_metadata() * self.isi_uS, self.isi_uS
+            ),
+            0,
+        ).astype(int)
+        self.trigger_states = np.zeros(len(self.trigger_times)).astype(int)
+
     def load_triggerdata(self):
 
         # load triggerdata
-        try:
-            triggerdata_csv = list(self.recording_directory.glob("*.triggerdata.csv"))[0]
-        except:
-            raise FileNotFoundError("No triggerdata file found in the recording directory.")
-        times, pins, states = np.loadtxt(triggerdata_csv, delimiter=",", skiprows=1).T
-        self.trigger_times = times[pins == self.trigger_pin]
-        self.trigger_states = states[pins == self.trigger_pin].astype(int)
+        trig_files = list(self.recording_directory.glob("*.triggerdata.csv"))
+        if len(trig_files) == 0:
+            self.make_fictive_triggerdata()
+            logger.info("No triggerdata file found. Creating fictive triggerdata.")
+        else:
+            triggerdata_csv = trig_files[0]
+            times, pins, states = np.loadtxt(triggerdata_csv, delimiter=",", skiprows=1).T
+            self.trigger_times = times[pins == self.trigger_pin]
+            self.trigger_states = states[pins == self.trigger_pin].astype(int)
 
         # ensure that no frames have beeen skipped in the microcontroller trigger
         if np.any(np.diff(self.trigger_times) / self.isi_uS > 1.5):
@@ -75,7 +98,7 @@ class CameraSynchronizer:
             raise ValueError(f"Skipped frames in microcontroller trigger: {max_skip}")
 
         # get recording length in hours
-        self.recording_length_hours = round(len(self.trigger_times) / self.samplerate / 60 / 60, 5)
+        self.recording_length_hours = round(len(self.trigger_times) / self.samplerate / 60 / 60, 5)  # not used
 
         # create a pandas dataframe populated by frame number, arduino time, and trigger state
         self.frame_df = pd.DataFrame(
@@ -129,8 +152,8 @@ class CameraSynchronizer:
         # load the config and triggerdata files
         logger.info("Loading video config, metadata, and triggerdata")
         self.load_config()
-        self.load_triggerdata()
         self.load_metadata()
+        self.load_triggerdata()
 
         # get the frame indexes
         change_m = (
@@ -152,8 +175,19 @@ class CameraSynchronizer:
             camera_frame_idx = 0
             pulse_frame_idx = 0
             for metadata_csv in camera_metadata_csvs.csv_loc.values:
+
                 # get the hardware timestamp from the metadata csv
-                camera_hw_timestamps = np.loadtxt(metadata_csv, delimiter=",", skiprows=1)[:, 1]
+                # camera_hw_timestamps = np.loadtxt(metadata_csv, delimiter=",", skiprows=1)[:, 1]
+
+                camera_hw_timestamps = np.genfromtxt(
+                    metadata_csv,
+                    delimiter=",",
+                    skip_header=1,
+                    usecols=1,
+                    dtype=float,
+                    missing_values="None",
+                    filling_values=np.nan,
+                )
                 camera_hw_timestamps /= 1e3  # Convert from nanoseconds to microseconds
 
                 # estimate the dropped frames

@@ -112,10 +112,29 @@ You don't need to run `AirflowDAG.run()` yourself. Airflow automates this proces
 
 ### Setting up airflow on your local machine
 
-First, install airflow on your local computer. 
+#### For Windows, first install WSL ####
 
+If you're not on a windows machine, skip these steps!
+* First install WSL: https://learn.microsoft.com/en-us/windows/wsl/install
+  * Username and pw can be the lab defaults
+  * Once installed, you can access this wsl instance just by typing the distro name into the Windows cmd prompt, eg `ubuntu` is the default.
+* Then install miniconda within WSL:
 ```
-# create an airflow conda environment
+mkdir -p ~/miniconda3
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
+bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
+rm ~/miniconda3/miniconda.sh
+```
+
+Great, now continue following the linux instructions below!
+
+#### Airflow install for Linux users
+
+* Make a new conda env for airflow: `conda create -n airflow python=3.12` (or whatever python version you want)
+* Then install airflow: see [here](https://airflow.apache.org/docs/apache-airflow/stable/installation/installing-from-pypi.html) for the latest instructions, below was up to date at time of this writing:
+```
+conda activate airflow
+pip install "apache-airflow[celery]==2.10.1" --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.1/constraints-3.8.txt"
 ```
 
 You can check that the Airflow install worked with the following steps:
@@ -128,9 +147,8 @@ Start the airflow web server in a separate tab or tmux
 ```
 airflow webserver
 ```
-Finally, navigate to `http://localhost:8080/` in your browser. 
-
-
+Finally, navigate to `http://localhost:8080/` in your browser to check that it works. You won't be able to log in until you create a user profile (see below).
+***
 By default, Airflow does not allow for parallelization. To setup parallelization, we need to switch to `postgresql` from `SQLite`. 
 
 First, quit `airflow scheduler` and `airflow webserver`.
@@ -144,7 +162,7 @@ sudo systemctl start postgresql
 sudo systemctl enable postgresql
 ```
 
-setup the database
+Setup the database. This first command will open an interactive session within your current one.
 ```
 sudo -i -u postgres
 psql
@@ -155,12 +173,13 @@ GRANT ALL PRIVILEGES ON DATABASE airflow_db TO airflow_user;
 GRANT ALL ON SCHEMA public TO airflow_user;
 \q
 ```
-Then reload
+
+Now exit the interactive session with Ctrl-D or equivalent. Then reload postgres:
 ```
 sudo systemctl reload postgresql
 ```
 
-update the config from
+Update the airflow config (usually at `~/airflow/airflow.cfg`, around line 496) from
 ```
 #sql_alchemy_conn = sqlite:////home/peromoseq/airflow/airflow.db
 ```
@@ -168,6 +187,8 @@ to
 ```
 sql_alchemy_conn = postgresql+psycopg2://airflow_user:airflow_pass@localhost/airflow_db
 ```
+(You can use vim -- `vim ~/airflow/airflow.cfg` and then hit `v` to enter EDIT mode, `ESC` to leave edit mode, and `:wq` to save and quit, or `:q` to quit without saving).
+
 Then create a username and password to use. This username and password will allow you to login when you go to `http://localhost:8080/`.
 ```
 airflow users create \
@@ -179,7 +200,9 @@ airflow users create \
     --email timsainb@gmail.com
 ```
 
-Finally, we need to switch airflow config setting from `SequentialExecutor` in `airflow.cfg` to allow for parallelization.
+You may have to install psycopg2: `pip install psycopg2-binary`
+
+Finally, we need to switch airflow config setting from `SequentialExecutor` in `airflow.cfg` to allow for parallelization (line 52)air.
 
 ```
 executor = LocalExecutor
@@ -189,11 +212,18 @@ Now airflow is parallelizable.
 
 To test, start `airflow scheduler` and `airflow webserver` and navigate to `http://localhost:8080/`
 
-
-
-
 ### Mount /n/groups/datta using `sshfs`
-To be able to check whether files are present, I mount `/n/groups/datta` locally using `sshfs`. Specifically, I set up `sshfs` so that `/n/groups/datta/` is mounted in `/n/groups/datta` in my local computer. Google 'how to install sshfs' if you don't already have it installed. 
+* First, set up your ssh key to O2 if you haven't generated an ssh key on your computer before: run `ssh-keygen` and just hit enter to put the file in teh default location / have no passphrase. (FYI we're still within WSL if you're on Windows.)
+* Then run `ssh-id-copy [USERNAME]@transfer.rc.hms.harvard.edu` and enter your O2 password to set up an easy ssh connection to O2 that won't require you to re-type your password each time.
+* Install sshfs with `sudo apt install sshfs`
+* Decide where you're going to mount the O2 files. We currently make a folder called `/n/groups/datta` locally; you'll probably need to use sudo and change the permissions to have read/write access there. In principle you can mount it anywhere but you'll need to update the airflow code.
+* The command to mount O2 with sshfs should then look something like:
+```
+sshfs [USERNAME]@transfer.rc.hms.harvard.edu:/n/groups/datta /n/groups/datta/
+```
+Then if you run `ls -la /n/groups/datta` you should see all our folders!
+* To unmount run: `fusermount3 -u /n/groups/datta`
+
 
 In principle, this shouldn't be strictly necessary, but for my jobs I use `sshfs` to check whether files are present without having to SSH. In future updates, we could remove the need for sshfs.
 
@@ -201,10 +231,18 @@ In principle, this shouldn't be strictly necessary, but for my jobs I use `sshfs
 - To run airflow, in one terminal tab type: `airflow webserver`
     - alternatively, use tmux to run these in the background
 - In a second tab, type: `airflow scheduler`
-- Then navigate to `http://localhost:8080/` in your browser. 
+- Then navigate to `http://localhost:8080/` in your browser.
+
 
 ### Adding your Airflow job
-Airflow DAGs are generated dynamically each time you start the scheduler. Ideally, we would also want DAGs to be generated when new rows are added to your google sheet. In the example located in `airflow_examples/example_dag.py`, I create a second DAG, `refresh_pipeline_dag` which does this by 'touching' the file containing it. Airflow looks for when dag files have changed to rerun them, so everytime `refresh_pipeline_dag`, it will also re-read the google sheet. 
+* At this point, if airflow is working, it may be nice to set `load_examples = False` in `airflow.cfg` so that the GUI isn't clogged with examples.
+
+Airflow DAGs are generated dynamically each time you start the scheduler. Ideally, we would also want DAGs to be generated when new rows are added to your google sheet. In the example located in `airflow_examples/example_dag.py`, I create a second DAG, `refresh_pipeline_dag` which does this by 'touching' the file containing it. Airflow looks for when dag files have changed to rerun them, so everytime `refresh_pipeline_dag`, it will also re-read the google sheet.
+
+To get Airflow to actually find this, you need to copy it to Airflow's dag directory, or change it's default. Airflow looks in `~/airflow/dags` and for files with "dag" in the name for DAGs.
+
+Since that means the example dag is outside the code directory, you will have to `pip install -e .` your code in your airflow conda env. Alternatively, you could probably change the airflow dag dir to point to your copy of the code. You may also have to run `pip install -r requirements.txt` in the airflow env if your requirements don't install correctly. 
+
 
 
 ## TODO / future tasks

@@ -50,6 +50,8 @@ class Triangulator:
         mean_filt_distance_thresh_px=150,  # Distance threshold for mean filtering in pixels
         perform_top_k_filtering=False,
         recompute_completed=False,
+        suppress_assertion=False,
+        sub_last_frame=True,
     ):
         """
         Triangulator class for processing 2D keypoint predictions and generating 3D positions.
@@ -86,6 +88,8 @@ class Triangulator:
         self.mean_filt_samples = mean_filt_samples
         self.mean_filt_distance_thresh_px = mean_filt_distance_thresh_px
         self.recompute_completed = recompute_completed
+        self.suppress_assertion = suppress_assertion
+        self.sub_last_frame = sub_last_frame
 
         # Initialize keypoint and skeleton information from dataset_info
         keypoint_info = dataset_info["keypoint_info"]
@@ -111,13 +115,10 @@ class Triangulator:
     def run(self):
 
         # check if the triangulation has already been completed
-        if self.recompute_completed:
+        if self.recompute_completed == False:
             if self.check_if_triangulation_exists():
                 logger.info("Triangulation already exists")
                 return
-
-        # load the 2D predictions
-        self.load_predictions()
 
         # ensure the camera sync already exists
         if not self.camera_sync_file.exists():
@@ -126,8 +127,10 @@ class Triangulator:
         # load the camera sync file
         #  there currently is one -1 at the end of each camera sync file
         #  if that gets fixed, we can remove the [:-1]
-        camera_sync_df = pd.read_csv(self.camera_sync_file)[:-1]
+        camera_sync_df = pd.read_csv(self.camera_sync_file)
         self.n_frames = len(camera_sync_df)
+        if self.sub_last_frame:
+            self.n_frames -= 1
 
         # compute the number of expected videos
         n_videos_expected = round(np.ceil(self.n_frames / self.expected_frames_per_video))
@@ -143,10 +146,14 @@ class Triangulator:
 
         assert self.n_cameras > 0, "No cameras found"
 
+        # load the 2D predictions
+        self.load_predictions()
+
         # ensure that we have a complete dataset
-        assert (
-            int(len(self.recording_predictions) / self.n_cameras) == n_videos_expected
-        ), f"Expected {n_videos_expected} videos, got {int(len(self.recording_predictions) / self.n_cameras)}"
+        if self.suppress_assertion == False:
+            assert (
+                int(len(self.recording_predictions) / self.n_cameras) == n_videos_expected
+            ), f"Expected {n_videos_expected} videos, got {int(len(self.recording_predictions) / self.n_cameras)}"
 
         # Create a temporary directory
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -169,12 +176,19 @@ class Triangulator:
             ):
                 self.triangulate_chunk(start_frame, chunk_i)
 
+            # Check if the destination file exists and remove it if it does
+            def move_and_overwrite(src, dst_dir):
+                dst = os.path.join(dst_dir, os.path.basename(src))
+                if os.path.exists(dst):
+                    os.remove(dst)
+                shutil.move(src, dst)
+
             # move the final temp_coordinates_file to the output directory
-            shutil.move(tmp_predictions_2d_file, self.output_directory_triangulation)
-            shutil.move(tmp_confidences_2d_file, self.output_directory_triangulation)
-            shutil.move(tmp_predictions_3d_file, self.output_directory_triangulation)
-            shutil.move(tmp_confidences_3d_file, self.output_directory_triangulation)
-            shutil.move(tmp_reprojection_errors_file, self.output_directory_triangulation)
+            move_and_overwrite(tmp_predictions_2d_file, self.output_directory_triangulation)
+            move_and_overwrite(tmp_confidences_2d_file, self.output_directory_triangulation)
+            move_and_overwrite(tmp_predictions_3d_file, self.output_directory_triangulation)
+            move_and_overwrite(tmp_confidences_3d_file, self.output_directory_triangulation)
+            move_and_overwrite(tmp_reprojection_errors_file, self.output_directory_triangulation)
 
         # mark triangulation as completed
         logger.info("Saving triangulations")
@@ -431,6 +445,9 @@ class Triangulator:
         self.recording_predictions = pd.DataFrame(
             {"camera": cam, "frame": frame, "file": predictions_2d_files}
         )
+        self.recording_predictions = self.recording_predictions[
+            self.recording_predictions.camera.isin(self.cameras)
+        ]
         # assert that there is the same number of frames for each camera
         assert same_frames_for_all_cameras(self.recording_predictions)
 

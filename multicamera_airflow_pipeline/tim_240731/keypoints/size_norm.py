@@ -16,6 +16,7 @@ from tqdm.auto import tqdm
 import logging
 import tempfile
 import shutil
+
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.info(f"Python interpreter binary location: {sys.executable}")
@@ -52,6 +53,7 @@ class SizeNormalizer:
         n_jobs=10,
         plot_steps=True,
         recompute_completed=False,
+        assert_completed=True,
     ):
 
         self.predictions_3d_file = Path(predictions_3d_file)
@@ -66,19 +68,24 @@ class SizeNormalizer:
         self.subsample = subsample
         self.n_jobs = n_jobs
         self.plot_steps = plot_steps
+        self.assert_completed = assert_completed
 
     def load_predictions_3d(self):
         # ensure that triangulation / gimbal has been completed
-        assert (
-            len(list(self.predictions_3d_file.parent.glob("*completed.log"))) > 0
-        ), "Predictions not completed"
+        if self.assert_completed:
+            assert (
+                len(list(self.predictions_3d_file.parent.glob("*completed.log"))) > 0
+            ), "Predictions not completed"
 
         self.predictions_3D_mmap = load_memmap_from_filename(self.predictions_3d_file)
+        # subsample if desired
+        if self.subsample is not None:
+            self.predictions_3D_mmap = self.predictions_3D_mmap[self.subsample]
 
     def check_completed(self):
         return (self.size_norm_output_directory / "completed.log").exists()
 
-    def run(self):
+    def run(self, show_plots=False):
 
         # skip if completed
         if self.check_completed() & (self.recompute_completed == False):
@@ -139,9 +146,18 @@ class SizeNormalizer:
             kpts = calculate_joint_angles_parallel(
                 kpts,
                 root_joint=self.root_joint,
-                samples_to_calculate=self.subsample,
+                samples_to_calculate=None,
                 n_jobs=self.n_jobs,
             )
+            fig, ax = plt.subplots()
+            sample_kpt = list(kpts.keys())[0]
+            ax.plot(kpts[sample_kpt])
+            ax.set_title(sample_kpt)
+            plt.savefig(self.size_norm_output_directory / f"kpt_pos_{sample_kpt}.png")
+            if show_plots:
+                plt.show()
+            else:
+                plt.close()
 
             # compute new sizes
             kpts = size_normalize(
@@ -180,6 +196,18 @@ class SizeNormalizer:
             )
         # mark as completed
         (self.size_norm_output_directory / "completed.log").touch()
+
+        # save output image
+        centroids = np.nanmean(recomputed_keypoints, axis=1)
+        fig, axs = plt.subplots(figsize=(6, 3), ncols=2)
+        axs[0].scatter(centroids[:, 0], centroids[:, 1], alpha=0.1, s=1)
+        axs[1].scatter(centroids[:, 0], centroids[:, 2], alpha=0.1, s=1)
+        # save the figure t9 the output directory
+        plt.savefig(self.size_norm_output_directory / "centroids.png")
+        if show_plots:
+            plt.show()
+        else:
+            plt.close()
 
     def initialize_output_folder(self, tmpdir_path):
 
@@ -574,8 +602,7 @@ def calculate_joint_angles_parallel(
 
     # Parallel computation
 
-    # results = Parallel(n_jobs=n_jobs)(
-    results = Parallel(n_jobs=1)(
+    results = Parallel(n_jobs=n_jobs)(
         delayed(calculate_frame_joint_angles)(
             joints=kpts["joints"],
             hierarchy=kpts["hierarchy"],

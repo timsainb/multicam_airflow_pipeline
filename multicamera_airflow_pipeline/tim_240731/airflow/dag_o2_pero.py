@@ -6,6 +6,7 @@ from pathlib import Path
 from datetime import datetime
 import logging
 import sys
+import numpy as np
 
 from multicamera_airflow_pipeline.tim_240731.airflow.jobs.o2 import (
     sync_cameras,
@@ -37,11 +38,8 @@ logger.info(f"Python interpreter binary location: {sys.executable}")
 
 sync_cameras_task = task(sync_cameras.sync_cameras, pool="low_compute_pool")
 predict_2d_task = task(predict_2d.predict_2d, pool="low_compute_pool")
-sync_cameras_to_openephys_task = task(
-    sync_cameras_to_openephys.sync_cameras_to_openephys, pool="low_compute_pool"
-)
+
 calibrate_cameras_task = task(calibrate_cameras.calibrate_cameras, pool="low_compute_pool")
-spikesorting_task = task(spikesorting.spikesorting, pool="low_compute_pool")
 triangulation_task = task(triangulation.triangulation, pool="low_compute_pool")
 run_gimbal_task = task(run_gimbal.run_gimbal, pool="low_compute_pool")
 size_normalization_task = task(size_normalization.size_normalization, pool="low_compute_pool")
@@ -69,9 +67,9 @@ class AirflowDAG:
         self,
         pipeline_name: str = "tim_240731",
         config_file: str = "/n/groups/datta/tim_sainburg/projects/multicamera_airflow_pipeline/multicamera_airflow_pipeline/tim_240731/default_config.yaml",
-        output_directory: str = "/n/groups/datta/kpts_pipeline/tim_240731/results",
-        job_directory: str = "/n/groups/datta/kpts_pipeline/tim_240731/jobs",
-        spreadsheet_url: str = "https://docs.google.com/spreadsheet/ccc?key=1jACsUmxuJ9Une59qmvzZGc1qXezKhKzD1zho2sEfcrU&output=csv&gid=0",
+        output_directory: str = "/n/groups/datta/kpts_pipeline/tim_airflow_pero_241010/results",
+        job_directory: str = "/n/groups/datta/kpts_pipeline/tim_airflow_pero_241010/jobs",
+        spreadsheet_url: str = "https://docs.google.com/spreadsheet/ccc?key=14HIqUaSl_n-91hpAvmACY_iVY9nLKdlA6qklhxfZon0&output=csv&gid=785542790",
         default_args={
             "owner": "airflow",
             "depends_on_past": False,
@@ -94,6 +92,14 @@ class AirflowDAG:
         self.job_directory = Path(job_directory)
         self.config_file = Path(config_file)
         self.recording_df = read_google_sheet(spreadsheet_url)
+        # remove missing data
+        self.recording_df[
+            np.any(
+                self.recording_df[["date", "video_recording_id", "calibration_id"]].isnull().values
+                == False,
+                axis=1,
+            )
+        ]
         self.scheduling_interval = schedule_interval
         self.default_args = default_args
         self.pipeline_name = pipeline_name
@@ -124,8 +130,7 @@ class AirflowDAG:
                     self.output_directory,
                     self.config_file,
                 )
-                if not recording_row["use_local"]:
-                    logger.info("Using O2 for 2D prediction")
+                if recording_row["use_local"] == "FALSE":
                     predicted_2d = predict_2d_task(
                         recording_row,
                         self.job_directory,
@@ -133,7 +138,6 @@ class AirflowDAG:
                         self.config_file,
                     )
                 else:
-                    logger.info("Using local for 2D prediction")
                     predicted_2d = predict_2d_local_task(
                         recording_row,
                         self.job_directory,
@@ -154,18 +158,7 @@ class AirflowDAG:
                     self.output_directory,
                     self.config_file,
                 )
-                synced_ephys = sync_cameras_to_openephys_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
-                sorted_spikes = spikesorting_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
+
                 triangulated = triangulation_task(
                     recording_row,
                     self.job_directory,
@@ -206,7 +199,6 @@ class AirflowDAG:
                 # define dependencies
                 predicted_2d >> completed_2d
                 [synced_cams, calibrated, completed_2d] >> triangulated
-                synced_cams >> synced_ephys
                 triangulated >> gimbaled
                 gimbaled >> size_normed
                 size_normed >> arena_aligned
