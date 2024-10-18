@@ -19,6 +19,7 @@ from multicamera_airflow_pipeline.tim_240731.airflow.jobs.o2 import (
     arena_alignment,
     egocentric_alignment,
     compute_continuous_features,
+    validation_videos,
 )
 
 from multicamera_airflow_pipeline.tim_240731.airflow.jobs.local.predict_2d_local import (
@@ -56,6 +57,7 @@ await_2d_predictions_task = task(
     await_2d_predictions.await_2d_predictions, pool="low_compute_pool"
 )
 predict_2d_local_task = task(predict_2d_local, pool="local_gpu_pool")
+validation_videos_task = task(validation_videos.validation_videos, pool="low_compute_pool")
 
 
 def read_google_sheet(spreadsheet_url):
@@ -202,13 +204,19 @@ class AirflowDAG:
                     self.output_directory,
                     self.config_file,
                 )
+                validation_vids = validation_videos_task(
+                    recording_row,
+                    self.job_directory,
+                    self.output_directory,
+                    self.config_file,
+                )
 
                 # define dependencies
                 predicted_2d >> completed_2d
                 [synced_cams, calibrated, completed_2d] >> triangulated
                 synced_cams >> synced_ephys
                 triangulated >> gimbaled
-                gimbaled >> size_normed
+                gimbaled >> [size_normed, validation_vids]
                 size_normed >> arena_aligned
                 size_normed >> ego_aligned
                 [arena_aligned, ego_aligned] >> cont_feats
