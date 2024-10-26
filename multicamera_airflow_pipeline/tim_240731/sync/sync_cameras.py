@@ -90,6 +90,9 @@ class CameraSynchronizer:
             times, pins, states = np.loadtxt(triggerdata_csv, delimiter=",", skiprows=1).T
             self.trigger_times = times[pins == self.trigger_pin]
             self.trigger_states = states[pins == self.trigger_pin].astype(int)
+            if isempty(self.trigger_times):
+                self.make_fictive_triggerdata()
+                logger.info("Wrong trigger pin assigned")
 
         # ensure that no frames have beeen skipped in the microcontroller trigger
         if np.any(np.diff(self.trigger_times) / self.isi_uS > 1.5):
