@@ -9,7 +9,7 @@ from multicamera_airflow_pipeline.tim_240731.airflow.dag_o2 import AirflowDAG
 # gets the dag
 airflow_dag = AirflowDAG(
     spreadsheet_url="https://docs.google.com/spreadsheet/ccc?key=1jACsUmxuJ9Une59qmvzZGc1qXezKhKzD1zho2sEfcrU&output=csv&gid=0",
-    config_file="/n/groups/datta/tim_sainburg/projects/multicamera_airflow_pipeline/multicamera_airflow_pipeline/tim_240731/default_config.yaml",
+    config_file="/n/groups/datta/Jonah/Local_code_groups/6cam_repos/multicam_airflow_pipeline/multicamera_airflow_pipeline/jonah_241112/default_config_v2.yaml",
 )
 
 # runs the dag
