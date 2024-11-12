@@ -9,7 +9,6 @@ from datetime import datetime
 import yaml
 import subprocess
 
-
 class LocalRunner:
     """Class to run a job locally, with a specific conda environment"""
 
