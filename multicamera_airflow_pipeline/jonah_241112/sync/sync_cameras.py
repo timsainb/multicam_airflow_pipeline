@@ -1,3 +1,4 @@
+import re
 import pandas as pd
 from pathlib import Path
 import numpy as np
@@ -6,6 +7,7 @@ import yaml
 import logging
 import sys
 import cv2
+from multicamera_airflow_pipeline.utils.datetime_utils import extract_datetime_from_folder_name
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -35,12 +37,17 @@ class CameraSynchronizer:
         self.output_directory = Path(output_directory)
         self.trigger_pin = trigger_pin
         self.samplerate = samplerate
+        
         # get the expected interval between frames (in microseconds)
         self.isi_uS = 1 / self.samplerate * 1000 * 1000
+        
         # get recording start time
-        self.recording_start = datetime.strptime(
-            self.recording_directory.name, "%y-%m-%d-%H-%M-%S-%f"
-        )
+        
+        # self.recording_start = datetime.strptime(
+        #     self.recording_directory.name, "%y-%m-%d-%H-%M-%S-%f"
+        # )
+        self.recording_start = extract_datetime_from_folder_name(self.recording_directory.name)
+        
         self.recompute_completed = recompute_completed
 
     def check_completed(self):
