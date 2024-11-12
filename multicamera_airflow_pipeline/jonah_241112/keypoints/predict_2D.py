@@ -189,7 +189,7 @@ class Inferencer2D:
                     import sys
                     # print python executable
                     print(sys.executable)
-                    from multicamera_airflow_pipeline.tim_240731.keypoints.predict_2D import predict_video
+                    from multicamera_airflow_pipeline.jonah_241112.keypoints.predict_2D import predict_video
                     predict_video(
                         video_path="{video_path.as_posix()}",
                         output_h5_file="{temp_h5_path}",

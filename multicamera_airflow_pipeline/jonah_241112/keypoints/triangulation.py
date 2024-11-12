@@ -22,7 +22,7 @@ print("Python interpreter binary location:", sys.executable)
 logger = logging.getLogger(__name__)
 
 # load skeleton
-from multicamera_airflow_pipeline.tim_240731.skeletons.defaults import (
+from multicamera_airflow_pipeline.jonah_241112.skeletons.defaults import (
     dataset_info,
     parents_dict,
     keypoint_info,

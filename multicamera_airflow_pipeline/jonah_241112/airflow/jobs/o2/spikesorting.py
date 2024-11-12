@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from io import BytesIO
 from pathlib import Path
-from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
+from multicamera_airflow_pipeline.jonah_241112.interface.o2 import O2Runner
 from datetime import datetime
 import textwrap
 import inspect
@@ -112,7 +112,7 @@ def spikesorting(
     config = yaml.safe_load(open(config_file, 'r'))
 
     # grab sync cameras function
-    from multicamera_airflow_pipeline.tim_240731.ephys.spikesorting_ks4 import SpikeSorter
+    from multicamera_airflow_pipeline.jonah_241112.ephys.spikesorting_ks4 import SpikeSorter
     spikesorter = SpikeSorter(
         ephys_recording_directory= params["ephys_recording_directory"],
         spikesorting_output_directory = params["spikesorting_output_directory"],

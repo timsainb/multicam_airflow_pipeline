@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from io import BytesIO
 from pathlib import Path
-from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
+from multicamera_airflow_pipeline.jonah_241112.interface.o2 import O2Runner
 from datetime import datetime
 import textwrap
 import inspect
@@ -106,7 +106,7 @@ def size_normalization(
     config = yaml.safe_load(open(config_file, 'r'))
 
     # grab sync cameras function
-    from multicamera_airflow_pipeline.tim_240731.keypoints.size_norm import SizeNormalizer 
+    from multicamera_airflow_pipeline.jonah_241112.keypoints.size_norm import SizeNormalizer 
     size_normalizer = SizeNormalizer(
         size_norm_output_directory = params['size_norm_output_directory'],
         predictions_3d_file = params['predictions_3d_file'],

@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from io import BytesIO
 from pathlib import Path
-from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
+from multicamera_airflow_pipeline.jonah_241112.interface.o2 import O2Runner
 from datetime import datetime
 import textwrap
 import inspect
@@ -92,7 +92,7 @@ def calibrate_cameras(
     config = yaml.safe_load(open(config_file, 'r'))
 
     # grab sync cameras function
-    from multicamera_airflow_pipeline.tim_240731.calibration import Calibrator 
+    from multicamera_airflow_pipeline.jonah_241112.calibration import Calibrator 
     camera_calibrator = Calibrator(
         calibration_video_directory = params["calibration_video_directory"],
         calibration_output_directory = params["output_directory_camera_calibration"],

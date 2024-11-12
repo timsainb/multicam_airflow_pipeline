@@ -39,12 +39,12 @@ logger.info(f"JAX devices: {jax.devices()}")
 
 # load skeleton
 try:
-    from multicamera_airflow_pipeline.tim_240731.skeletons.sainburg25pt import dataset_info
+    from multicamera_airflow_pipeline.jonah_241112.skeletons.sainburg25pt import dataset_info
 except:
 
     # Add the directory containing the file to the system path
     sys.path.append(
-        "/n/groups/datta/tim_sainburg/projects/multicamera_airflow_pipeline/multicamera_airflow_pipeline/tim_240731/skeletons/sainburg25pt.py"
+        "/n/groups/datta/tim_sainburg/projects/multicamera_airflow_pipeline/multicamera_airflow_pipeline/jonah_241112/skeletons/sainburg25pt.py"
     )
     # Now import the dataset_info dictionary
     from sainburg25pt import dataset_info
@@ -53,7 +53,7 @@ default_keypoints = [keypoint_info[i]["name"] for i in keypoint_info.keys()]
 default_keypoints = np.array(default_keypoints)
 
 # load skeleton
-from multicamera_airflow_pipeline.tim_240731.skeletons.defaults import (
+from multicamera_airflow_pipeline.jonah_241112.skeletons.defaults import (
     dataset_info,
     parents_dict,
     keypoint_info,

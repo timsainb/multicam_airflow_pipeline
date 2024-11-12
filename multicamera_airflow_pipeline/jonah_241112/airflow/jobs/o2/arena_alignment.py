@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from io import BytesIO
 from pathlib import Path
-from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
+from multicamera_airflow_pipeline.jonah_241112.interface.o2 import O2Runner
 from datetime import datetime
 import textwrap
 import inspect
@@ -107,7 +107,7 @@ def arena_alignment(
     config = yaml.safe_load(open(config_file, 'r'))
 
     # grab sync cameras function
-    from multicamera_airflow_pipeline.tim_240731.keypoints.alignment.arena import ArenaAligner 
+    from multicamera_airflow_pipeline.jonah_241112.keypoints.alignment.arena import ArenaAligner 
     arena_aligner = ArenaAligner(
         predictions_3d_file = params['predictions_3d_file'],
         arena_alignment_output_directory = params['arena_alignment_output_directory'],

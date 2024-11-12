@@ -30,7 +30,7 @@ class RTMModelConverter:
         tensorrt_output_directory,
         rtmdetection_model_name,
         rtmpose_model_name,
-        skeleton_py_file="/n/groups/datta/tim_sainburg/projects/multicamera_airflow_pipeline/multicamera_airflow_pipeline/tim_240731/skeletons/sainburg25pt.py",
+        skeleton_py_file="/n/groups/datta/tim_sainburg/projects/multicamera_airflow_pipeline/multicamera_airflow_pipeline/jonah_241112/skeletons/sainburg25pt.py",
         conda_env="/n/groups/datta/tim_sainburg/conda_envs/mmdeploy",
         path_to_mmdeploy="/n/groups/datta/tim_sainburg/projects/mmdeploy/",
         path_to_demo_image_detection="/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/example_data/test_mouse.png",

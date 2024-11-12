@@ -70,7 +70,7 @@ class AirflowDAG:
     def __init__(
         self,
         pipeline_name: str = "jonah_241112",
-        config_file: str = "/n/groups/datta/tim_sainburg/projects/multicamera_airflow_pipeline/multicamera_airflow_pipeline/jonah_241112/default_config.yaml",
+        config_file: str = "/n/groups/datta/tim_sainburg/projects/multicamera_airflow_pipeline/multicamera_airflow_pipeline/jonah_241112/default_config_v2.yaml",
         output_directory: str = "/n/groups/datta/kpts_pipeline/jonah_241112/results",
         job_directory: str = "/n/groups/datta/kpts_pipeline/jonah_241112/jobs",
         spreadsheet_url: str = "https://docs.google.com/spreadsheet/ccc?key=1jACsUmxuJ9Une59qmvzZGc1qXezKhKzD1zho2sEfcrU&output=csv&gid=0",

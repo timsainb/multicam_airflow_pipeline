@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from io import BytesIO
 from pathlib import Path
-from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
+from multicamera_airflow_pipeline.jonah_241112.interface.o2 import O2Runner
 from datetime import datetime
 import textwrap
 import inspect
@@ -108,7 +108,7 @@ def sync_cameras(
     config = yaml.safe_load(open(config_file, 'r'))
         
     # grab sync cameras function
-    from multicamera_airflow_pipeline.tim_240731.sync.sync_cameras import CameraSynchronizer
+    from multicamera_airflow_pipeline.jonah_241112.sync.sync_cameras import CameraSynchronizer
     synchronizer = CameraSynchronizer(
         recording_directory=params["recording_directory"],
         output_directory=params["output_directory_camera_sync"],

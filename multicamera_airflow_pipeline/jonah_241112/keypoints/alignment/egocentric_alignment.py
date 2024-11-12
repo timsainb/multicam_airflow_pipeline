@@ -26,7 +26,7 @@ from scipy.spatial.transform import Rotation as R
 from sklearn.linear_model import LinearRegression
 
 # load skeleton
-from multicamera_airflow_pipeline.tim_240731.skeletons.defaults import (
+from multicamera_airflow_pipeline.jonah_241112.skeletons.defaults import (
     dataset_info,
     skeleton_info,
     parents_dict,

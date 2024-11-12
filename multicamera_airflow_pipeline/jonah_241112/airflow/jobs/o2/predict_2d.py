@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from io import BytesIO
 from pathlib import Path
-from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
+from multicamera_airflow_pipeline.jonah_241112.interface.o2 import O2Runner
 from datetime import datetime
 import textwrap
 import inspect
@@ -117,7 +117,7 @@ def predict_2d(
         config = yaml.safe_load(open(config_file, 'r'))
 
         # covert models to tensorrt
-        from multicamera_airflow_pipeline.tim_240731.keypoints.tensorrt import RTMModelConverter
+        from multicamera_airflow_pipeline.jonah_241112.keypoints.tensorrt import RTMModelConverter
         model_converter = RTMModelConverter(
             tensorrt_output_directory = params["tensorrt_model_directory"],
             **config["tensorrt_conversion"]
@@ -125,7 +125,7 @@ def predict_2d(
         model_converter.run()
 
         # grab sync cameras function
-        from multicamera_airflow_pipeline.tim_240731.keypoints.predict_2D import Inferencer2D
+        from multicamera_airflow_pipeline.jonah_241112.keypoints.predict_2D import Inferencer2D
         inferencer = Inferencer2D(
             recording_directory = params["recording_directory"],
             output_directory_predictions = params["output_directory_predictions"],
@@ -148,7 +148,7 @@ def predict_2d(
         config = yaml.safe_load(open(config_file, 'r'))
 
         # grab sync cameras function
-        from multicamera_airflow_pipeline.tim_240731.keypoints.predict_2D import Inferencer2D
+        from multicamera_airflow_pipeline.jonah_241112.keypoints.predict_2D import Inferencer2D
         inferencer = Inferencer2D(
             recording_directory = params["recording_directory"],
             output_directory_predictions = params["output_directory_predictions"],

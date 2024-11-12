@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from io import BytesIO
 from pathlib import Path
-from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
+from multicamera_airflow_pipeline.jonah_241112.interface.o2 import O2Runner
 from datetime import datetime
 import textwrap
 import inspect
@@ -121,8 +121,8 @@ def run_gimbal(
     params = yaml.safe_load(open(params_file, 'r'))
     config = yaml.safe_load(open(config_file, 'r'))
 
-    from multicamera_airflow_pipeline.tim_240731.keypoints.train_gimbal import GimbalTrainer 
-    from multicamera_airflow_pipeline.tim_240731.keypoints.inference_gimbal import GimbalInferencer 
+    from multicamera_airflow_pipeline.jonah_241112.keypoints.train_gimbal import GimbalTrainer 
+    from multicamera_airflow_pipeline.jonah_241112.keypoints.inference_gimbal import GimbalInferencer 
     # train gimbal
     gimbal_trainer = GimbalTrainer(
         gimbal_output_directory=params["gimbal_output_directory"],

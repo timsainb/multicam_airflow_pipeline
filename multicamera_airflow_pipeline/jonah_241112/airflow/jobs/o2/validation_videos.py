@@ -6,7 +6,7 @@ import time
 
 import yaml
 
-from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
+from multicamera_airflow_pipeline.jonah_241112.interface.o2 import O2Runner
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -111,7 +111,7 @@ def validation_videos(
     config = yaml.safe_load(open(config_file, 'r'))
 
     # grab sync cameras function
-    from multicamera_airflow_pipeline.tim_240731.keypoints.validation_videos import KeypointVideoCreator 
+    from multicamera_airflow_pipeline.jonah_241112.keypoints.validation_videos import KeypointVideoCreator 
     creator = KeypointVideoCreator(
         predictions_2d_directory = params['predictions_2d_directory'],
         predictions_triang_directory = params['predictions_triang_directory'],

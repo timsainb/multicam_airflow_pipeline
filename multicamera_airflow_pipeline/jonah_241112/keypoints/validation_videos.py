@@ -14,7 +14,7 @@ from scipy.ndimage import median_filter
 from tqdm.auto import tqdm
 
 # load skeleton
-from multicamera_airflow_pipeline.tim_240731.skeletons.defaults import (
+from multicamera_airflow_pipeline.jonah_241112.skeletons.defaults import (
     dataset_info,
 )
 

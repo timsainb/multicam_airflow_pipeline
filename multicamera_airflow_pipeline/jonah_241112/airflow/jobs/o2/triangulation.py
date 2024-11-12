@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from io import BytesIO
 from pathlib import Path
-from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
+from multicamera_airflow_pipeline.jonah_241112.interface.o2 import O2Runner
 from datetime import datetime
 import textwrap
 import inspect
@@ -126,7 +126,7 @@ def triangulation(
     config = yaml.safe_load(open(config_file, 'r'))
 
     # grab sync cameras function
-    from multicamera_airflow_pipeline.tim_240731.keypoints.triangulation import Triangulator 
+    from multicamera_airflow_pipeline.jonah_241112.keypoints.triangulation import Triangulator 
     triangulator = Triangulator(
         predictions_2d_directory = params['predictions_2d_directory'],
         output_directory_triangulation = params['output_directory_triangulation'],

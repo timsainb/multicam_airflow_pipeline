@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from io import BytesIO
 from pathlib import Path
-from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
+from multicamera_airflow_pipeline.jonah_241112.interface.o2 import O2Runner
 from datetime import datetime
 import textwrap
 import inspect
@@ -115,7 +115,7 @@ def egocentric_alignment(
     config = yaml.safe_load(open(config_file, 'r'))
 
     # grab sync cameras function
-    from multicamera_airflow_pipeline.tim_240731.keypoints.alignment.egocentric_alignment import EgocentricAligner 
+    from multicamera_airflow_pipeline.jonah_241112.keypoints.alignment.egocentric_alignment import EgocentricAligner 
     # run rigid alignment
     arena_aligner = EgocentricAligner(
         predictions_3d_file = params['predictions_3d_file'],

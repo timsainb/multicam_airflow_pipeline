@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from io import BytesIO
 from pathlib import Path
-from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
+from multicamera_airflow_pipeline.jonah_241112.interface.o2 import O2Runner
 from datetime import datetime
 import textwrap
 import inspect
@@ -120,7 +120,7 @@ def compute_continuous_features(
     config = yaml.safe_load(open(config_file, 'r'))
 
     # grab sync cameras function
-    from multicamera_airflow_pipeline.tim_240731.keypoints.continuous_variables import ContinuousVariables # run rigid alignment
+    from multicamera_airflow_pipeline.jonah_241112.keypoints.continuous_variables import ContinuousVariables # run rigid alignment
     continuous_features_estimator = ContinuousVariables(
         continuous_features_output_directory= params["continuous_features_output_directory"],
         coordinates_egocentric_filename = params["coordinates_egocentric_filename"],
