@@ -189,12 +189,12 @@ class AirflowDAG:
                     self.output_directory,
                     self.config_file,
                 )
-                cont_feats = compute_continuous_features_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
+                # cont_feats = compute_continuous_features_task(
+                #    recording_row,
+                #    self.job_directory,
+                #    self.output_directory,
+                #    self.config_file,
+                # )
 
                 # define dependencies
                 predicted_2d >> completed_2d
@@ -203,7 +203,7 @@ class AirflowDAG:
                 gimbaled >> size_normed
                 size_normed >> arena_aligned
                 size_normed >> ego_aligned
-                [arena_aligned, ego_aligned] >> cont_feats
+                # [arena_aligned, ego_aligned] >> cont_feats
 
             globals()[dag_id] = generated_dag
             logger.info(f"DAG {dag_id} created")

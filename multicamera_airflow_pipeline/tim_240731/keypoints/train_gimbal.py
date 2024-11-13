@@ -27,6 +27,7 @@ from tensorflow_probability.substrates.jax.distributions import VonMisesFisher a
 from gimbal.fit import em_step
 from jax import lax, jit
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 from jax.lib import xla_bridge
@@ -210,7 +211,9 @@ class GimbalTrainer:
 
         # load a sample into memory for training
         if self.training_subsample_frames is None:
-            self.training_subsample_frames = self.samplerate * 60 * 30
+            self.training_subsample_frames = int(self.samplerate * 60 * 30)
+        self.training_subsample_frames = int(self.training_subsample_frames)
+
         self.confidences_2D = confidences = np.array(
             self.confidences_2D_mmap[: self.training_subsample_frames]
         )

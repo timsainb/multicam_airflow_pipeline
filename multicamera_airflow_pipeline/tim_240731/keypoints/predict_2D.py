@@ -350,7 +350,7 @@ def predict_video(
             assert n_motpy_tracks >= n_animals
 
         n_frames = 0
-        for frame_id in tqdm(range(total_frames), leave=False, desc="frames", miniters=1000):
+        for frame_id in tqdm(range(total_frames), leave=False, desc="frames", miniters=10000):
             success, frame = video.read()
             if not success:
                 break

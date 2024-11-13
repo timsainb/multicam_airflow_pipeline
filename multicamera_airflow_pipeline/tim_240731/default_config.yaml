@@ -123,7 +123,7 @@ prediction_2d:
   tensorrt_rtmdetection_model_name : 'rtmdet_tiny_8xb32-300e_coco_chronic_24-05-04-17-51-58_216661'
   n_keypoints : 25
   n_animals : 1
-  detection_interval : 1
+  detection_interval : 3
   use_motpy : True
   n_motpy_tracks : 3
   use_tensorrt : True
