@@ -116,7 +116,7 @@ gimbal:
 
 prediction_2d:
   pose_estimator_config: "/n/groups/datta/6cam_keypoint_networks/mm_pose/Jonah/20241030_v1/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-11-01-20-36-55/config.py"
-  pose_estimator_checkpoint: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-05-04-21-35-13_305524/best_PCK_epoch_80.pth"
+  pose_estimator_checkpoint: "/n/groups/datta/6cam_keypoint_networks/mm_pose/Jonah/20241030_v1/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-11-01-20-36-55/best_PCK_epoch_80.pth"
   detector_config: "/n/groups/datta/6cam_keypoint_networks/mm_pose/Jonah/20241030_v1/rtmdet/rtmdet_small_8xb32-300e_coco_chronic_24-10-31-12-48-26/config.py"
   detector_checkpoint: "/n/groups/datta/6cam_keypoint_networks/mm_pose/Jonah/20241030_v1/rtmdet/rtmdet_small_8xb32-300e_coco_chronic_24-10-31-12-48-26/epoch_63.pth"
   tensorrt_rtmpose_model_name : 'rtmpose-m_8xb64-210e_ap10k-256x256_24-11-01-20-36-55'
@@ -132,7 +132,7 @@ prediction_2d:
 
 tensorrt_conversion:
   path_to_rmpose_config: "/n/groups/datta/6cam_keypoint_networks/mm_pose/Jonah/20241030_v1/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-11-01-20-36-55/config.py"
-  path_to_rmpose_checkpoint: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-05-04-21-35-13_305524/best_PCK_epoch_80.pth"
+  path_to_rmpose_checkpoint: "/n/groups/datta/6cam_keypoint_networks/mm_pose/Jonah/20241030_v1/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-11-01-20-36-55/best_PCK_epoch_80.pth"
   path_to_rtmdetection_config: "/n/groups/datta/6cam_keypoint_networks/mm_pose/Jonah/20241030_v1/rtmdet/rtmdet_small_8xb32-300e_coco_chronic_24-10-31-12-48-26/config.py"
   path_to_rtmdetection_checkpoint: "/n/groups/datta/6cam_keypoint_networks/mm_pose/Jonah/20241030_v1/rtmdet/rtmdet_small_8xb32-300e_coco_chronic_24-10-31-12-48-26/epoch_63.pth"
   rtmdetection_model_name: "rtmdet_tiny_8xb32-300e_coco_chronic_24-05-04-17-51-58_216661"
