@@ -36,8 +36,8 @@ def extract_datetime_from_folder_name(folder_name):
 
     # Define the regex patterns for the datetime formats you expect
     patterns = [
-        (r'\b(\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-\d{6})\b', '%y-%m-%d-%H-%M-%S-%f'),
-        (r'\b(\d{8})\b', '%Y%m%d')
+        (r'.*(\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-\d{6}).*', '%y-%m-%d-%H-%M-%S-%f'),
+        (r'.*(\d{8}).*', '%Y%m%d')
     ]
     
     # Iterate over the patterns

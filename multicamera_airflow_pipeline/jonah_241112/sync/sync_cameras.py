@@ -97,7 +97,10 @@ class CameraSynchronizer:
             times, pins, states = np.loadtxt(triggerdata_csv, delimiter=",", skiprows=1).T
             self.trigger_times = times[pins == self.trigger_pin]
             self.trigger_states = states[pins == self.trigger_pin].astype(int)
-
+            if len(self.trigger_times) == 0:
+                logger.info(f"Making fictive triggerdata. No triggerdata for the specified pin ({self.trigger_pin}) found.")
+                self.make_fictive_triggerdata()
+                
         # ensure that no frames have beeen skipped in the microcontroller trigger
         if np.any(np.diff(self.trigger_times) / self.isi_uS > 1.5):
             max_skip = np.max(np.diff(self.trigger_times) / self.isi_uS)
@@ -115,8 +118,13 @@ class CameraSynchronizer:
     def load_metadata(self):
         # get the camera metadata csvs
         metadata_csvs = list(self.recording_directory.glob(f"*.metadata.csv"))
+        metadata_csvs = [i for i in metadata_csvs if "azure" not in i.stem]
         camera = [i.stem.split(".")[1] for i in metadata_csvs]
         frame = [i.stem.split(".")[2] for i in metadata_csvs]
+        try:
+            frame = np.array(frame).astype(int)
+        except ValueError:
+            frame = np.array(["0" for i in metadata_csvs]).astype(int)  # some vids don't have ".0" in the filename
         self.metadata_csvs_df = pd.DataFrame(
             {
                 "camera": camera,
@@ -136,6 +144,8 @@ class CameraSynchronizer:
         # get the fps of the videos
         fps = []
         for video in videos:
+            if "azure" in video.stem:
+                continue
             cap = cv2.VideoCapture(str(video))
             fps.append(cap.get(cv2.CAP_PROP_FPS))
             cap.release()

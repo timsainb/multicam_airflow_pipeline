@@ -64,20 +64,20 @@ class Calibrator:
         try:
             self.video_paths = {
                 camera: [
-                    list(Path(f"{self.calibration_video_directory}").glob(f"*{camera}.mp4"))[0]
+                    list(Path(f"{self.calibration_video_directory}").glob(f"*.{camera}.mp4"))[0]
                 ]
                 for camera in self.camera_names
             }
-        except:
+        except ValueError:
             self.video_paths = {
                 camera: [
-                    list(Path(f"{self.calibration_video_directory}").glob(f"*{camera}.0.mp4"))[0]
+                    list(Path(f"{self.calibration_video_directory}").glob(f"*.{camera}.0.mp4"))[0]
                 ]
                 for camera in self.camera_names
             }
         for camera in self.camera_names:
             additional_videos = list(
-                Path(f"{self.calibration_video_directory}").glob(f"{camera}.*.mp4")
+                Path(f"{self.calibration_video_directory}").glob(f".{camera}.*.mp4")
             )
             additional_videos = [
                 i for i in additional_videos if i.stem.split(".")[-1].startswith("0") == False

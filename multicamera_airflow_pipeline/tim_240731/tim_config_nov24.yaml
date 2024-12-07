@@ -115,12 +115,12 @@ gimbal:
     recompute_completed: False
 
 prediction_2d:
-  pose_estimator_config: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-05-04-21-35-13_305524/config.py"
-  pose_estimator_checkpoint: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-05-04-21-35-13_305524/best_PCK_epoch_200.pth"
-  detector_config: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmdet/rtmdet_tiny_8xb32-300e_coco_chronic_24-05-04-17-51-58_216661/config.py"
-  detector_checkpoint: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmdet/rtmdet_tiny_8xb32-300e_coco_chronic_24-05-04-17-51-58_216661/epoch_400.pth"
-  tensorrt_rtmpose_model_name : 'rtmpose-m_8xb64-210e_ap10k-256x256_24-05-04-21-35-13_305524'
-  tensorrt_rtmdetection_model_name : 'rtmdet_tiny_8xb32-300e_coco_chronic_24-05-04-17-51-58_216661'
+  pose_estimator_config: "/n/groups/datta/tim_sainburg/datasets/scratch/mm_training/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-10-31-15-37-42/config.py"
+  pose_estimator_checkpoint: "/n/groups/datta/tim_sainburg/datasets/scratch/mm_training/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-10-31-15-37-42/best_PCK_epoch_210.pth"
+  detector_config: "/n/groups/datta/tim_sainburg/datasets/scratch/mm_training/rtmdet/rtmdet_tiny_24-11-04-11-40-31/config.py"
+  detector_checkpoint: "/n/groups/datta/tim_sainburg/datasets/scratch/mm_training/rtmdet/rtmdet_tiny_24-11-04-11-40-31/epoch_200.pth"
+  tensorrt_rtmpose_model_name : 'rtmpose-m_8xb64-210e_ap10k-256x256_24-10-31-15-37-42'
+  tensorrt_rtmdetection_model_name : 'rtmdet_tiny_24-11-04-11-40-31'
   n_keypoints : 25
   n_animals : 1
   detection_interval : 3
@@ -131,12 +131,12 @@ prediction_2d:
   ignore_log_files : True
 
 tensorrt_conversion:
-  path_to_rmpose_config: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-05-04-21-35-13_305524/config.py"
-  path_to_rmpose_checkpoint: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-05-04-21-35-13_305524/best_PCK_epoch_200.pth"
-  path_to_rtmdetection_config: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmdet/rtmdet_tiny_8xb32-300e_coco_chronic_24-05-04-17-51-58_216661/config.py"
-  path_to_rtmdetection_checkpoint: "/n/groups/datta/tim_sainburg/projects/24-01-05-multicamera_keypoints_mm2d/models/rtmdet/rtmdet_tiny_8xb32-300e_coco_chronic_24-05-04-17-51-58_216661/epoch_400.pth"
-  rtmdetection_model_name: "rtmdet_tiny_8xb32-300e_coco_chronic_24-05-04-17-51-58_216661"
-  rtmpose_model_name: "rtmpose-m_8xb64-210e_ap10k-256x256_24-05-04-21-35-13_305524"
+  path_to_rmpose_config: "/n/groups/datta/tim_sainburg/datasets/scratch/mm_training/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-10-31-15-37-42/config.py"
+  path_to_rmpose_checkpoint: "/n/groups/datta/tim_sainburg/datasets/scratch/mm_training/rtmpose/rtmpose-m_8xb64-210e_ap10k-256x256_24-10-31-15-37-42/best_PCK_epoch_210.pth"
+  path_to_rtmdetection_config: "/n/groups/datta/tim_sainburg/datasets/scratch/mm_training/rtmdet/rtmdet_tiny_24-11-04-11-40-31/config.py"
+  path_to_rtmdetection_checkpoint: "/n/groups/datta/tim_sainburg/datasets/scratch/mm_training/rtmdet/rtmdet_tiny_24-11-04-11-40-31/epoch_200.pth"
+  rtmdetection_model_name: 'rtmdet_tiny_24-11-04-11-40-31'
+  rtmpose_model_name: 'rtmpose-m_8xb64-210e_ap10k-256x256_24-10-31-15-37-42'
   skeleton_py_file: "/n/groups/datta/tim_sainburg/projects/multicamera_airflow_pipeline/multicamera_airflow_pipeline/tim_240731/skeletons/sainburg25pt.py"
   conda_env: "/n/groups/datta/tim_sainburg/conda_envs/mmdeploy"
   path_to_mmdeploy: "/n/groups/datta/tim_sainburg/projects/mmdeploy/"
@@ -148,12 +148,16 @@ tensorrt_conversion:
 tensorrt_conversion_local:
   conda_env: "/home/peromoseq/anaconda3/envs/mmdeploy"
 
+validation_videos:
+  recompute_completed: False
+  max_frames: 7200  # 1 min @ 120 fps
+
 o2:
   sync_cameras:
-    o2_memory: "16G"
+    o2_memory: "8G"
     o2_n_cpus: 1
     o2_queue: "short,priority"
-    o2_runtime_multiplier: 1
+    o2_runtime_multiplier: 0.05
     conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
 
   sync_ephys:
@@ -171,7 +175,7 @@ o2:
     conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
 
   prediction_2d:
-    o2_memory: "64G"
+    o2_memory: "16G"
     o2_n_cpus: 20
     o2_queue: "gpu_quad,gpu"
     o2_runtime_multiplier: 20
@@ -191,10 +195,10 @@ o2:
     conda_env: "/n/groups/datta/tim_sainburg/conda_envs/kilosort4"
 
   gimbal:
-    o2_memory: "64G"
-    o2_n_cpus: 10
+    o2_memory: "16G"
+    o2_n_cpus: 2
     o2_queue: "gpu_quad,gpu"
-    o2_runtime_multiplier: 10
+    o2_runtime_multiplier: 3
     o2_exclude: "compute-g-16-175,compute-g-16-176,compute-g-16-177,compute-g-16-194,compute-g-16-197"
     o2_qos: "gpuquad_qos"
     o2_gres: "gpu:1"
@@ -202,35 +206,43 @@ o2:
   
   triangulation:
     o2_memory: "16G"
-    o2_n_cpus: 10
+    o2_n_cpus: 10 # these cores are used efficiently
     o2_queue: "short,priority"
-    o2_runtime_multiplier: 2
+    o2_runtime_multiplier: 0.5
     conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
 
   size_normalization:
-      o2_memory: "32G"
-      o2_n_cpus: 5
+      o2_memory: "16G"
+      o2_n_cpus: 5 # using about 50% cpu efficiency
       o2_queue: "short,priority"
-      o2_runtime_multiplier: 3
+      o2_runtime_multiplier: 0.5
       conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
 
   arena_alignment:
-      o2_memory: "16G"
+      o2_memory: "8G"
       o2_n_cpus: 1
       o2_queue: "short,priority"
-      o2_runtime_multiplier: 2
+      o2_runtime_multiplier: 0.1
       conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
 
   egocentric_alignment:
-    o2_memory: "16G"
+    o2_memory: "8G"
     o2_n_cpus: 1
     o2_queue: "short,priority"
-    o2_runtime_multiplier: 2
+    o2_runtime_multiplier: 0.2
     conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
 
   continuous_features:
-    o2_memory: "16G"
+    o2_memory: "8G"
     o2_n_cpus: 1
     o2_queue: "short,priority"
-    o2_runtime_multiplier: 2
+    o2_runtime_multiplier: 0.1
     conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
+
+  validation_videos:
+    o2_memory: "8G"
+    o2_n_cpus: 1
+    o2_queue: "short,priority"
+    o2_time_limit: "2:30:00"  # writes ~30 fps, so if we default to 1 min @ 120 fps -> 7200 fr -> 4 min x 6 vids x 2 types of vid = ~ 1 hr, + compressing takes ~1 hr more.
+    conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
+

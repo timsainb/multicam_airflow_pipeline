@@ -194,7 +194,6 @@ class KeypointVideoCreator:
             }
 
     def create_2D_keypoint_conf_plots(self):
-        # import pdb; pdb.set_trace()
         all_kp_confs = np.stack(
             [self.predictions_2d[cam]["keypoint_conf"] for cam in self.cameras], axis=-1
         )

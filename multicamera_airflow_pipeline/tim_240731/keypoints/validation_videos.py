@@ -21,6 +21,7 @@ from multicamera_airflow_pipeline.tim_240731.skeletons.defaults import (
 logging.info("Python interpreter binary location:", sys.executable)
 logger = logging.getLogger(__name__)
 
+
 class KeypointVideoCreator:
     def __init__(
         self,
@@ -69,9 +70,7 @@ class KeypointVideoCreator:
         # Initialize keypoint and skeleton information from dataset_info
         self.keypoint_info = dataset_info["keypoint_info"]
         self.skeleton_info = dataset_info["skeleton_info"]
-        self.keypoint_idx = {
-            value["name"]: key for key, value in self.keypoint_info.items()
-        }
+        self.keypoint_idx = {value["name"]: key for key, value in self.keypoint_info.items()}
 
         # Order of keypoints as predicted
         self.keypoints = np.array(
@@ -82,30 +81,28 @@ class KeypointVideoCreator:
     def check_if_validation_vids_exist(self):
         # checks a log saved in the output directory to see if the validation videos have already been created
 
-        if (
-            self.output_directory_keypoint_vids / "keypoint_videos_completed.log"
-        ).exists():
+        if (self.output_directory_keypoint_vids / "keypoint_videos_completed.log").exists():
             return True
         else:
             return False
 
     def set_completed(self):
-        with open(
-            self.output_directory_keypoint_vids / "keypoint_videos_completed.log", "w"
-        ) as f:
+        with open(self.output_directory_keypoint_vids / "keypoint_videos_completed.log", "w") as f:
             f.write("Keypoint vids completed")
 
     def load_video_filenames(self):
         # grab all the video files
         self.video_files = {}
         for camera in self.cameras:
-            self.video_files[camera] = list(
-                self.raw_video_directory.glob(f"*{camera}*.mp4")
-            )
+            self.video_files[camera] = list(self.raw_video_directory.glob(f"*{camera}*.mp4"))
             if len(self.video_files[camera]) == 0:
                 raise ValueError(f"No video files found for camera {camera}")
             elif len(self.video_files[camera]) > 1:
-                raise ValueError(f"Multiple video files found for camera {camera}")
+                # TODO: Add logic to select the correct video file
+                # raise ValueError(f"Multiple video files found for camera {camera}")
+                self.video_files[camera] = list(self.raw_video_directory.glob(f"*{camera}.0.mp4"))[
+                    0
+                ]
             else:
                 self.video_files[camera] = self.video_files[camera][0]
 
@@ -173,11 +170,13 @@ class KeypointVideoCreator:
     def load_triang_reproj_predictions(self):
         # Load max_frames of 2D reprojections
         self.predictions_triang = {}
-        keypoint_coords = load_memmap_from_filename(self.triang_predictions_file)  # shape: (n_frames, n_keypoints, 3)
+        keypoint_coords = load_memmap_from_filename(
+            self.triang_predictions_file
+        )  # shape: (n_frames, n_keypoints, 3)
         keypoint_conf = load_memmap_from_filename(self.triang_confidences_file)
         for iCamera, camera in enumerate(self.cameras):
-            these_coords_3D = keypoint_coords[:self.max_frames, :, :]
-            these_confs = keypoint_conf[:self.max_frames, :]
+            these_coords_3D = keypoint_coords[: self.max_frames, :, :]
+            these_confs = keypoint_conf[: self.max_frames, :]
 
             # Reproject the coords into 2D
             extrinsics = self.all_extrinsics[iCamera]
@@ -200,9 +199,7 @@ class KeypointVideoCreator:
         )
         max_kp_confs_per_frame = np.max(all_kp_confs, axis=-1)
         plt.figure()
-        plt.matshow(
-            max_kp_confs_per_frame.T, aspect="auto", cmap="PiYG", vmin=0, vmax=1
-        )
+        plt.matshow(max_kp_confs_per_frame.T, aspect="auto", cmap="PiYG", vmin=0, vmax=1)
         cbar = plt.colorbar()
         cbar.set_label("Max keypoint confidence")
         cbar.set_ticks([0, 0.5, 1])
@@ -250,8 +247,7 @@ class KeypointVideoCreator:
 
     def crop_and_stitch_2D_keypoint_videos(self):
         bbox_coords_by_camera = {
-            camera: self.predictions_2d[camera]["detection_coords"]
-            for camera in self.cameras
+            camera: self.predictions_2d[camera]["detection_coords"] for camera in self.cameras
         }
         crop_and_stich_vids(
             output_directory=self.output_directory_keypoint_vids,
@@ -305,21 +301,25 @@ class KeypointVideoCreator:
         self.load_2D_prediction_filenames()
         self.load_2D_predictions()
 
+        logger.info("Creating 2D video")
         # Create the 2D keypoint videos
         self.create_2D_keypoint_conf_plots()
         self.create_2D_keypoint_videos()
         self.crop_and_stitch_2D_keypoint_videos()
-        
+
         # Load the triangulated 3D predictions
         self.load_triang_prediction_filenames()
         self.load_triang_reproj_predictions()
 
+        logger.info("Creating 3D video")
         # Create the triangulated keypoint videos
         self.create_reproj_triang_keypoint_videos()
         self.crop_and_stitch_reproj_triang_keypoint_videos()
 
+        logger.info("Creating 3D video")
         # Compress all the videos
         # (Runs at ~10 fps --> adds another 7200 frames / 10 fps = 720s = 12 minutes x 6 vids = ~1 hr)
+
         logging.info("Compressing videos")
         for vid in self.output_directory_keypoint_vids.glob("*.mp4"):
             compressed_vid = vid.with_name(vid.stem + "_compressed.mp4")
@@ -330,13 +330,14 @@ class KeypointVideoCreator:
                 preset="fast",  # runs at ~10 fps (which is kinda slow) but compresses ~10x which is nice for speeding up subsequent downloads of the QC vids.
                 recompute_completed=self.recompute_completed,
             )
-        
+
             # Remove the original
+            # TODO: fix error os.remove(vid) FileNotFoundError
             os.remove(vid)
 
             # Rename the compressed file
             compressed_vid.rename(vid)
-        
+
         # Mark as completed
         logging.info("Marking as completed")
         self.set_completed()
@@ -344,7 +345,9 @@ class KeypointVideoCreator:
         return
 
 
-def compress_vid_via_ffmpeg(input_vid, output_vid, crf=23, preset="fast", recompute_completed=False):
+def compress_vid_via_ffmpeg(
+    input_vid, output_vid, crf=23, preset="fast", recompute_completed=False
+):
     """
     Compresses a video file using ffmpeg.
 
@@ -362,7 +365,7 @@ def compress_vid_via_ffmpeg(input_vid, output_vid, crf=23, preset="fast", recomp
     preset : str
         Preset for the video compression. Options are: 'ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium',
     """
-    
+
     # Check if the output file already exists
     if output_vid.exists() and not recompute_completed:
         logging.info(f"Output file already exists: {output_vid}")
@@ -505,10 +508,7 @@ def generate_keypoint_video(
 
             # Draw keypoints
             for kp_idx, kp_info in keypoint_info.items():
-                if (
-                    frame_idx < len(keypoint_coords)
-                    and kp_idx < keypoint_coords.shape[1]
-                ):
+                if frame_idx < len(keypoint_coords) and kp_idx < keypoint_coords.shape[1]:
                     x, y = keypoint_coords[frame_idx, kp_idx]
                     if np.isnan(x) or np.isnan(y):
                         continue
@@ -531,19 +531,11 @@ def generate_keypoint_video(
             for link_info in skeleton_info.values():
                 kp1_name, kp2_name = link_info["link"]
                 kp1_id = next(
-                    (
-                        kp["id"]
-                        for kp in keypoint_info.values()
-                        if kp["name"] == kp1_name
-                    ),
+                    (kp["id"] for kp in keypoint_info.values() if kp["name"] == kp1_name),
                     None,
                 )
                 kp2_id = next(
-                    (
-                        kp["id"]
-                        for kp in keypoint_info.values()
-                        if kp["name"] == kp2_name
-                    ),
+                    (kp["id"] for kp in keypoint_info.values() if kp["name"] == kp2_name),
                     None,
                 )
 
@@ -743,9 +735,7 @@ def load_memmap_from_filename(filename):
     parts = filename.name.rsplit(".", 4)  # Split the filename into parts
     dtype_str = parts[-3]  # Get the dtype part of the filename
     shape_str = parts[-2]  # Get the shape part of the filename
-    shape = tuple(
-        map(int, shape_str.split("x"))
-    )  # Convert shape string to a tuple of integers
+    shape = tuple(map(int, shape_str.split("x")))  # Convert shape string to a tuple of integers
     # Load the array using numpy memmap
     array = np.memmap(filename, dtype=dtype_str, mode="r", shape=shape)
     return array

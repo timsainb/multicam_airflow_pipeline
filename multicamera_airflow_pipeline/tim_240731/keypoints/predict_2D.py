@@ -43,6 +43,7 @@ class Inferencer2D:
         use_tensorrt=False,
         ignore_log_files=False,
         recompute_completed=False,
+        is_local=False,
     ):
 
         self.n_keypoints = n_keypoints
@@ -64,6 +65,7 @@ class Inferencer2D:
         self.tensorrt_rtmpose_model_name = tensorrt_rtmpose_model_name
         self.recompute_completed = recompute_completed
         self.ignore_log_files = ignore_log_files
+        self.is_local = is_local
 
         # get the device
         cuda_available = torch.cuda.is_available()
@@ -210,7 +212,10 @@ class Inferencer2D:
                     )
                     # print(sys.executable)
                     # Run the process and capture the output
-                    command = f"module load cuda/11.7 && {sys.executable} -c '{python_script}'"
+                    if self.is_local:
+                        command = f"{sys.executable} -c '{python_script}'"
+                    else:
+                        command = f"module load cuda/11.7 && {sys.executable} -c '{python_script}'"
                     process = subprocess.Popen(
                         # ["python", "-c", python_script],
                         # [sys.executable, "-c", python_script],

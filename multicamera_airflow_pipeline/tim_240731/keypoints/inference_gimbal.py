@@ -293,7 +293,7 @@ class GimbalInferencer:
             conf_sigmoid_center=self.conf_sigmoid_center,
             conf_sigmoid_gain=self.conf_sigmoid_gain,  # 20
         )
-
+        # FIX ME: this should reflect the camera image dimensions
         # remove out of frame predictions
         observations[observations < 0] = 0
         observations[observations > 2000] = 2000
@@ -305,7 +305,6 @@ class GimbalInferencer:
         samples = gimbal.mcmc3d_full.initialize(
             jr.PRNGKey(0), self.params, observations, outlier_prob, init_positions
         )
-        # print(self.params)
 
         ## inference over the entire video
         # average positions over some timeframe
@@ -342,16 +341,16 @@ class GimbalInferencer:
                 positions_sum += np.array(samples["positions"])
                 tot += 1
                 positions_mean = positions_sum / tot
+                if self.plot_progress:
+                    fig, axs = plt.subplots(ncols=2, figsize=(10, 3))
+                    axs[0].plot(samples["positions"][:1000, 0, 0])
+                    axs[0].plot(positions_mean[:1000, 0, 0])
+                    axs[0].plot(init_positions[:1000, 0, 0])
 
-                fig, axs = plt.subplots(ncols=2, figsize=(10, 3))
-                axs[0].plot(samples["positions"][:1000, 0, 0])
-                axs[0].plot(positions_mean[:1000, 0, 0])
-                axs[0].plot(init_positions[:1000, 0, 0])
-
-                axs[1].plot(samples["positions"][:100, 0, 0])
-                axs[1].plot(positions_mean[:100, 0, 0])
-                axs[1].plot(init_positions[:100, 0, 0])
-                plt.show()
+                    axs[1].plot(samples["positions"][:100, 0, 0])
+                    axs[1].plot(positions_mean[:100, 0, 0])
+                    axs[1].plot(init_positions[:100, 0, 0])
+                    plt.show()
 
             pbar.set_description(
                 "ll={:.2f}, diff={:.2f}".format(log_likelihood, difference_from_baseline)

@@ -19,7 +19,6 @@ from multicamera_airflow_pipeline.tim_240731.airflow.jobs.o2 import (
     arena_alignment,
     egocentric_alignment,
     compute_continuous_features,
-    validation_videos,
 )
 
 from multicamera_airflow_pipeline.tim_240731.airflow.jobs.local.predict_2d_local import (
@@ -57,7 +56,6 @@ await_2d_predictions_task = task(
     await_2d_predictions.await_2d_predictions, pool="low_compute_pool"
 )
 predict_2d_local_task = task(predict_2d_local, pool="local_gpu_pool")
-validation_videos_task = task(validation_videos.validation_videos, pool="low_compute_pool")
 
 
 def read_google_sheet(spreadsheet_url):
@@ -73,7 +71,7 @@ class AirflowDAG:
         config_file: str = "/n/groups/datta/tim_sainburg/projects/multicamera_airflow_pipeline/multicamera_airflow_pipeline/tim_240731/default_config.yaml",
         output_directory: str = "/n/groups/datta/kpts_pipeline/tim_240731/results",
         job_directory: str = "/n/groups/datta/kpts_pipeline/tim_240731/jobs",
-        spreadsheet_url: str = "https://docs.google.com/spreadsheet/ccc?key=1jACsUmxuJ9Une59qmvzZGc1qXezKhKzD1zho2sEfcrU&output=csv&gid=0",
+        spreadsheet_url: str = "https://docs.google.com/spreadsheet/ccc?key=14HIqUaSl_n-91hpAvmACY_iVY9nLKdlA6qklhxfZon0&output=csv&gid=785542790",
         default_args={
             "owner": "airflow",
             "depends_on_past": False,
@@ -126,8 +124,7 @@ class AirflowDAG:
                     self.output_directory,
                     self.config_file,
                 )
-                if not recording_row["use_local"]:
-                    logger.info("Using O2 for 2D prediction")
+                if recording_row["use_local"] == "FALSE":
                     predicted_2d = predict_2d_task(
                         recording_row,
                         self.job_directory,
@@ -135,7 +132,6 @@ class AirflowDAG:
                         self.config_file,
                     )
                 else:
-                    logger.info("Using local for 2D prediction")
                     predicted_2d = predict_2d_local_task(
                         recording_row,
                         self.job_directory,
@@ -198,28 +194,22 @@ class AirflowDAG:
                     self.output_directory,
                     self.config_file,
                 )
-                cont_feats = compute_continuous_features_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
-                validation_vids = validation_videos_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
+                # cont_feats = compute_continuous_features_task(
+                #    recording_row,
+                #    self.job_directory,
+                #    self.output_directory,
+                #    self.config_file,
+                # )
 
                 # define dependencies
                 predicted_2d >> completed_2d
                 [synced_cams, calibrated, completed_2d] >> triangulated
                 synced_cams >> synced_ephys
                 triangulated >> gimbaled
-                gimbaled >> [size_normed, validation_vids]
+                gimbaled >> size_normed
                 size_normed >> arena_aligned
                 size_normed >> ego_aligned
-                [arena_aligned, ego_aligned] >> cont_feats
+                # [arena_aligned, ego_aligned] >> cont_feats
 
             globals()[dag_id] = generated_dag
             logger.info(f"DAG {dag_id} created")

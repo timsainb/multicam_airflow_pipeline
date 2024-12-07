@@ -111,6 +111,7 @@ class Inferencer2D:
                 logger.info(f"Video processing incomplete, running")
 
         self.all_videos = list(self.recording_directory.glob("*.mp4"))
+        self.all_videos = [v for v in self.all_videos if "azure" not in v.stem]
 
         logger.info(f"Processing {len(self.all_videos)} videos")
         assert len(self.all_videos) > 0, f"No videos found in {self.recording_directory}"

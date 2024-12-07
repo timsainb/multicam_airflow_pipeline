@@ -165,6 +165,7 @@ def predict_2d_local(
             output_directory_predictions = params["output_directory_predictions"],
             expected_video_length_frames = params["expected_video_length_frames"],
             tensorrt_model_directory = params["tensorrt_model_directory"],
+            is_local=True,
             **config["prediction_2d"]
         )
         camera_calibrator.run()

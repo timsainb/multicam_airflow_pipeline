@@ -48,6 +48,7 @@ class Triangulator:
         print_nans=True,  # Flag to print NaNs
         mean_filt_samples=11,  # Number of samples for mean filtering (~100ms at 120fps)
         mean_filt_distance_thresh_px=150,  # Distance threshold for mean filtering in pixels
+        perform_leave_one_out_filtering=True,
         perform_top_k_filtering=False,
         recompute_completed=False,
         suppress_assertion=False,
@@ -65,6 +66,7 @@ class Triangulator:
         n_jobs (int): Number of parallel jobs. Default is 5.
         keep_top_k (int): Number of top keypoints to keep. Default is 3.
         perform_top_k_filtering (bool): Flag to perform top k filtering. Default is False.
+        perform_leave_one_out_filtering (bool): Flag to perform leave-one-out filtering. Default is False.
         leave_one_out_center_threshold_mm (float): Threshold distance for leave-one-out center in mm. Default is 50.
         threshold_distance_from_parent_mm (float): Threshold distance from parent keypoint in mm. Default is 50.
         mmap_dtype (str): Data type for memory-mapped files. Default is "float32".
@@ -90,6 +92,7 @@ class Triangulator:
         self.recompute_completed = recompute_completed
         self.suppress_assertion = suppress_assertion
         self.sub_last_frame = sub_last_frame
+        self.perform_leave_one_out_filtering = perform_leave_one_out_filtering
 
         # Initialize keypoint and skeleton information from dataset_info
         keypoint_info = dataset_info["keypoint_info"]
@@ -143,6 +146,7 @@ class Triangulator:
         self.cameras = camera_names
         self.n_cameras = len(self.cameras)
         logging.info(f"\t n_cameras {self.n_cameras}")
+        print(camera_names)
 
         assert self.n_cameras > 0, "No cameras found"
 
@@ -214,6 +218,8 @@ class Triangulator:
         detection_coords_chunk = np.zeros((chunk_end - chunk_start, len(self.cameras), 4)) * np.nan
         detection_coords_chunk[:] = np.nan
 
+        print(self.cameras)
+
         for ci, camera in enumerate(self.cameras):
             camera_2d_row = self.recording_predictions[
                 (self.recording_predictions.camera == camera)
@@ -231,24 +237,25 @@ class Triangulator:
             detection_conf_chunk[:, ci] = np.squeeze(detection_conf)
         if self.print_nans:
             prop_nan = np.mean(np.isnan(positions_2d_chunk))
-            logger.info(f"\tTotal: Prop 2D keypoints are NaNs: {round(prop_nan, 3)}")
+            logger.info(f"Initial: Prop 2D keypoints are NaNs: {round(prop_nan, 3)}")
 
         # remove keypoints that aren't aligned with other cameras
-        positions_2d_chunk, confidences_2d_chunk = leave_one_out_2d_filter(
-            positions_2d_chunk,
-            self.cameras,
-            detection_coords_chunk,
-            self.all_extrinsics,
-            self.all_intrinsics,
-            confidences_2d_chunk,
-            leave_one_out_center_threshold=self.leave_one_out_center_threshold_mm,
-            n_jobs=self.n_jobs,
-            plot_results=False,
-        )
+        if self.perform_leave_one_out_filtering:
+            positions_2d_chunk, confidences_2d_chunk = leave_one_out_2d_filter(
+                positions_2d_chunk,
+                self.cameras,
+                detection_coords_chunk,
+                self.all_extrinsics,
+                self.all_intrinsics,
+                confidences_2d_chunk,
+                leave_one_out_center_threshold=self.leave_one_out_center_threshold_mm,
+                n_jobs=self.n_jobs,
+                plot_results=False,
+            )
 
         if self.print_nans:
             prop_nan = np.mean(np.isnan(positions_2d_chunk))
-            logger.info(f"\tTotal: Prop 2D keypoints are NaNs: {round(prop_nan, 3)}")
+            logger.info(f"LOO filter: Prop 2D keypoints are NaNs: {round(prop_nan, 3)}")
 
         # compute distance of each point to the median over n samples
         mean_kpt_movement = uniform_filter(
@@ -263,7 +270,7 @@ class Triangulator:
         positions_2d_chunk[np.concatenate([m[:1], m])] = np.nan
         if self.print_nans:
             prop_nan = np.mean(np.isnan(positions_2d_chunk))
-            logger.info(f"\tTotal: Prop 2D keypoints are NaNs: {round(prop_nan, 3)}")
+            logger.info(f"distance filter: Prop 2D keypoints are NaNs: {round(prop_nan, 3)}")
 
         # only keep the top k confidence cameras
         #    generally not needed, since we're weighting by confidence in triangulation
@@ -288,7 +295,7 @@ class Triangulator:
 
         if self.print_nans:
             prop_nan = np.mean(np.isnan(positions_3D_chunk))
-            print(f"\tTotal: Prop 3D keypoints are NaNs: {round(prop_nan, 3)}")
+            print(f"triangulation: Prop 3D keypoints are NaNs: {round(prop_nan, 3)}")
 
         # filter keypoints that are very far from their parent
         positions_3D_chunk = filter_3d_keypoints_based_on_distance_from_parent(
@@ -300,7 +307,7 @@ class Triangulator:
 
         if self.print_nans:
             prop_nan = np.mean(np.isnan(positions_3D_chunk))
-            print(f"\tTotal: Prop 3D keypoints are NaNs: {round(prop_nan, 3)}")
+            print(f"\distance filter: Prop 3D keypoints are NaNs: {round(prop_nan, 3)}")
 
         # get reprojections
         positions_2D_reprojections = np.zeros(positions_2d_chunk.shape) * np.nan
@@ -313,9 +320,9 @@ class Triangulator:
                 camera_matrix=camera_matrix,
                 dist_coefs=dist_coefs,
             )
-        if self.print_nans:
-            prop_nan = np.mean(np.isnan(positions_3D_chunk))
-            print(f"\tTotal: Prop 3D keypoints are NaNs: {round(prop_nan, 3)}")
+        # if self.print_nans:
+        #    prop_nan = np.mean(np.isnan(positions_3D_chunk))
+        #    print(f"\tTotal: Prop 3D keypoints are NaNs: {round(prop_nan, 3)}")
 
         # compute the reprojection errors for each keypoint / camera
         reprojection_errors_chunk = np.sqrt(

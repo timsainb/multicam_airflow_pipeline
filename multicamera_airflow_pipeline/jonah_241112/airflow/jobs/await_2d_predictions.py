@@ -31,6 +31,7 @@ def await_2d_predictions(
         Path(recording_row.video_location_on_o2) / recording_row.video_recording_id
     )
     all_videos = list(recording_directory.glob("*.mp4"))
+    all_videos = [v for v in all_videos if "azure" not in v.stem]
     assert len(all_videos) > 0, f"No videos found in {recording_directory}"
     logger.info(f"Found {len(all_videos)} videos")
 

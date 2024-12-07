@@ -10,6 +10,7 @@ import os
 import shutil
 import sys
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.info(f"Python interpreter binary location: {sys.executable}")
@@ -73,6 +74,7 @@ class RTMModelConverter:
         self.rtmpose_output.mkdir(parents=True, exist_ok=True)
 
     def generate_sitecustomize_script(self):
+        # TODO: fix hardcoding the COCO25pt sitecustomize
         sitecustomize_script = "from mmpose.registry import DATASETS\n"
         sitecustomize_script += "from mmpose.datasets.datasets.base import BaseCocoStyleDataset\n"
         sitecustomize_script += f"skeleton_py_file = '{self.skeleton_py_file.as_posix()}'\n"
@@ -136,7 +138,7 @@ class RTMModelConverter:
         print("Model script: ======================")
         print(model_conversion_script)
         print("======================")
-        
+
         # Run the model conversion script
         process = subprocess.Popen(
             model_conversion_script,
