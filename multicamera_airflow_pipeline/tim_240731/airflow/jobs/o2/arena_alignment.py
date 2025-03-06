@@ -38,6 +38,8 @@ def arena_alignment(
     job_directory,
     output_directory,
     config_file,
+    reorder_dims=[0, 1, 2],
+    flip_z=False,
 ):
     # load config
     config_file = Path(config_file)
@@ -111,6 +113,8 @@ def arena_alignment(
     arena_aligner = ArenaAligner(
         predictions_3d_file = params['predictions_3d_file'],
         arena_alignment_output_directory = params['arena_alignment_output_directory'],
+        reorder_dims = {reorder_dims},
+        flip_z = {flip_z},
         **config["arena_alignment"]
     )
     arena_aligner.run()

@@ -179,17 +179,18 @@ o2:
     o2_n_cpus: 20
     o2_queue: "gpu_quad,gpu"
     o2_runtime_multiplier: 20
-    o2_exclude: "compute-g-16-175,compute-g-16-176,compute-g-16-177,compute-g-16-194,compute-g-16-197"
+    o2_exclude: ""
     o2_qos: "gpuquad_qos"
     o2_gres: "gpu:1"
     conda_env: "/n/groups/datta/tim_sainburg/conda_envs/mmdeploy"
+
 
   spikesorting:
     o2_memory: "64G"
     o2_n_cpus: 20
     o2_queue: "gpu_quad,gpu"
     o2_runtime_multiplier: 4
-    o2_exclude: "compute-g-16-175,compute-g-16-176,compute-g-16-177,compute-g-16-194,compute-g-16-197"
+    o2_exclude: ""
     o2_qos: "gpuquad_qos"
     o2_gres: "gpu:1"
     conda_env: "/n/groups/datta/tim_sainburg/conda_envs/kilosort4"
@@ -199,7 +200,7 @@ o2:
     o2_n_cpus: 2
     o2_queue: "gpu_quad,gpu"
     o2_runtime_multiplier: 3
-    o2_exclude: "compute-g-16-175,compute-g-16-176,compute-g-16-177,compute-g-16-194,compute-g-16-197"
+    o2_exclude: ""
     o2_qos: "gpuquad_qos"
     o2_gres: "gpu:1"
     conda_env: "/n/groups/datta/tim_sainburg/conda_envs/kpms"
@@ -212,10 +213,10 @@ o2:
     conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
 
   size_normalization:
-      o2_memory: "16G"
+      o2_memory: "64G" # 16G
       o2_n_cpus: 5 # using about 50% cpu efficiency
       o2_queue: "short,priority"
-      o2_runtime_multiplier: 0.5
+      o2_runtime_multiplier: 1.0
       conda_env: "/n/groups/datta/tim_sainburg/conda_envs/peromoseq"
 
   arena_alignment:

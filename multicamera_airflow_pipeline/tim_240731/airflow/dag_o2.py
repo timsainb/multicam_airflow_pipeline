@@ -19,6 +19,7 @@ from multicamera_airflow_pipeline.tim_240731.airflow.jobs.o2 import (
     arena_alignment,
     egocentric_alignment,
     compute_continuous_features,
+    validation_videos,
 )
 
 from multicamera_airflow_pipeline.tim_240731.airflow.jobs.local.predict_2d_local import (
@@ -56,7 +57,7 @@ await_2d_predictions_task = task(
     await_2d_predictions.await_2d_predictions, pool="low_compute_pool"
 )
 predict_2d_local_task = task(predict_2d_local, pool="local_gpu_pool")
-
+validation_videos_task = task(validation_videos.validation_videos, pool="low_compute_pool")
 
 def read_google_sheet(spreadsheet_url):
     response = requests.get(spreadsheet_url)
@@ -68,7 +69,7 @@ class AirflowDAG:
     def __init__(
         self,
         pipeline_name: str = "tim_240731",
-        config_file: str = "/n/groups/datta/tim_sainburg/projects/multicamera_airflow_pipeline/multicamera_airflow_pipeline/tim_240731/default_config.yaml",
+        config_file: str = "/n/groups/datta/tim_sainburg/projects/multicamera_airflow_pipeline/multicamera_airflow_pipeline/tim_240731/tim_config_nov24.yaml",
         output_directory: str = "/n/groups/datta/kpts_pipeline/tim_240731/results",
         job_directory: str = "/n/groups/datta/kpts_pipeline/tim_240731/jobs",
         spreadsheet_url: str = "https://docs.google.com/spreadsheet/ccc?key=14HIqUaSl_n-91hpAvmACY_iVY9nLKdlA6qklhxfZon0&output=csv&gid=785542790",
@@ -201,12 +202,19 @@ class AirflowDAG:
                 #    self.config_file,
                 # )
 
+                validation_vids = validation_videos_task(
+                    recording_row,
+                    self.job_directory,
+                    self.output_directory,
+                    self.config_file,
+                )
+
                 # define dependencies
                 predicted_2d >> completed_2d
                 [synced_cams, calibrated, completed_2d] >> triangulated
                 synced_cams >> synced_ephys
                 triangulated >> gimbaled
-                gimbaled >> size_normed
+                gimbaled >> [size_normed, validation_vids]
                 size_normed >> arena_aligned
                 size_normed >> ego_aligned
                 # [arena_aligned, ego_aligned] >> cont_feats

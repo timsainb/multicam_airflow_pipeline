@@ -1,5 +1,6 @@
 import sys
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.info(f"Python interpreter binary location: {sys.executable}")
@@ -42,14 +43,44 @@ class ArenaAligner:
         predictions_3d_file,  # Path to the 3D predictions file (size normalized mmap)
         arena_alignment_output_directory,
         batch_size=100000,
+        flip_z=False,
+        reorder_dims=[0, 1, 2],
         plot_steps=True,
         recompute_completed=False,
     ):
+        """Aligns the 3D predictions to the arena by rotating the data to align the floor with the feet.
+        The algorithm first fits a rectangle to the data, then rotates the data to align the floor with the feet.
+        The algorithm then fits a linear regression to the data to align the floor with the feet.
+        The algorithm then fits a final rectangle to the data, and rotates the data to align the floor with the feet.
+        The algorithm then checks whether the z axis is flipped (in the original data, the floor is the furthest object in the z plane).
+        If the z axis is flipped, the data is flipped.
+        The final aligned data is saved to the arena_alignment_output_directory.
+
+        Parameters
+        ----------
+        predictions_3d_file : str
+            Path to the 3D predictions file (size normalized mmap)
+        arena_alignment_output_directory : str
+            Path to the output directory
+        batch_size : int, optional
+            Number of samples to process at once, by default 100000
+        flip_z : bool, optional
+            Whether to flip the z axis, by default False. Use flip_z if the floor is the furthest object in the z plane.
+        reorder_dims : list, optional
+            Order of the dimensions, by default [0, 1, 2]. Use reorder_dims to reorder the dimensions
+            (this will be based on which camera is the 'master' in the calibration)
+        plot_steps : bool, optional
+            Whether to plot the steps, by default True
+        recompute_completed : bool, optional
+            Whether to recompute the completed file, by default False
+        """
         self.batch_size = batch_size
         self.recompute_completed = recompute_completed
         self.predictions_3d_file = Path(predictions_3d_file)
         self.arena_alignment_output_directory = Path(arena_alignment_output_directory)
         self.plot_steps = plot_steps
+        self.flip_z = flip_z
+        self.reorder_dims = np.array(reorder_dims)
 
     def check_completed(self):
         return (self.arena_alignment_output_directory / "completed.txt").exists()
@@ -77,7 +108,10 @@ class ArenaAligner:
             temp_coordinates_file, temp_centroids_file = self.initialize_output(tmpdir_path)
 
             # grab a subset of the coordinates that will fit into memory
-            coordinates = sample_evenly(self.predictions_3D_mmap, max_samples=100000)
+            coordinates = sample_evenly(self.predictions_3D_mmap, max_samples=self.batch_size)
+            coordinates = coordinates[:, :, self.reorder_dims]
+            if self.flip_z:
+                coordinates[:, :, 2] *= -1
 
             if np.any(np.isnan(coordinates)):
                 logger.info(f"\t prop nans: {np.mean(np.isnan(coordinates))}")
@@ -96,7 +130,9 @@ class ArenaAligner:
             for batch in range(self.n_batches):
                 batch_start = batch * self.batch_size
                 batch_end = (batch + 1) * self.batch_size
-                batch = np.array(self.predictions_3D_mmap[batch_start:batch_end])
+                batch = np.array(
+                    self.predictions_3D_mmap[batch_start:batch_end, :, self.reorder_dims]
+                )
                 if np.any(np.isnan(batch)):
                     logger.info(f"\t prop nans batch: {np.mean(np.isnan(batch))}")
                     batch = generate_initial_positions(batch)
@@ -362,16 +398,17 @@ class ArenaAligner:
             ).statistic
             z_axis_is_flipped = np.sign(z_axis_correlation) == -1
             if z_axis_is_flipped:
-                coordinates[:, :, 2] *= -1
+                if self.flip_z == False:
+                    coordinates[:, :, 2] *= -1
 
-                # rotate points in coordinates_output memmap in batches of 100k samples
-                #   following the fit rectangle
-                for batch in range(self.n_batches):
-                    batch_start = batch * self.batch_size
-                    batch_end = (batch + 1) * self.batch_size
-                    batch = np.array(self.coordinates_output[batch_start:batch_end])
-                    batch[:, :, 2] *= -1
-                    self.coordinates_output[batch_start:batch_end] = batch
+                    # rotate points in coordinates_output memmap in batches of 100k samples
+                    #   following the fit rectangle
+                    for batch in range(self.n_batches):
+                        batch_start = batch * self.batch_size
+                        batch_end = (batch + 1) * self.batch_size
+                        batch = np.array(self.coordinates_output[batch_start:batch_end])
+                        batch[:, :, 2] *= -1
+                        self.coordinates_output[batch_start:batch_end] = batch
 
             # compute the current centroids
             centroids = np.median(coordinates, axis=1)

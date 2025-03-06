@@ -157,7 +157,7 @@ class CameraSynchronizer:
 
         # load the config and triggerdata files
         logger.info("Loading video config, metadata, and triggerdata")
-        self.load_config()
+        # self.load_config()
         self.load_metadata()
         self.load_triggerdata()
 

@@ -231,6 +231,18 @@ class Triangulator:
                 detection_conf = np.array(h5f["detection_conf"])
                 detection_coords = np.array(h5f["detection_coords"])
 
+            # ensure that predicitons are the correct length
+            n = len(keypoint_coords)
+            assert n <= len(
+                keypoint_coords
+            ), "Length of keypoint_coords is not as expected (possible different across cameras)"
+            if n < len(positions_2d_chunk):
+                positions_2d_chunk = positions_2d_chunk[:n]
+                confidences_2d_chunk = confidences_2d_chunk[:n]
+                detection_coords_chunk = detection_coords_chunk[:n]
+                detection_conf_chunk = detection_conf_chunk[:n]
+                chunk_end = chunk_start + n
+
             positions_2d_chunk[:, ci] = np.squeeze(keypoint_coords)
             confidences_2d_chunk[:, ci] = np.squeeze(keypoint_conf)
             detection_coords_chunk[:, ci] = np.squeeze(detection_coords)

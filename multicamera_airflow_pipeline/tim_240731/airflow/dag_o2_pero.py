@@ -110,9 +110,22 @@ class AirflowDAG:
 
         for idx, recording_row in self.recording_df.iterrows():
             subject_id = recording_row["Subject"]
+            if pd.isnull(subject_id):
+                continue
             video_recording_id = recording_row["video_recording_id"]
+            rig = recording_row["Rig"]
             dag_id = f"{self.pipeline_name}_{subject_id}_{video_recording_id}"
             logger.info(f"Attempting to create DAG {dag_id}")
+            
+                #raise ValueError(f"Invalid value for use_local in row {idx} {recording_row.use_local}")
+
+            ### SPECIFIC TO TIMS RIG/PIPELINE
+            #if rig == 1:
+            #    reorder_dims = [0, 2, 1]
+            #    flip_z = True
+            #else:
+            #    reorder_dims = [0, 2, 1]
+            #    flip_z = False
 
             with DAG(
                 dag_id=dag_id,
@@ -132,7 +145,7 @@ class AirflowDAG:
                     self.output_directory,
                     self.config_file,
                 )
-                if recording_row["use_local"] == "FALSE":
+                if recording_row["use_local"] == False:
                     predicted_2d = predict_2d_task(
                         recording_row,
                         self.job_directory,
