@@ -33,12 +33,7 @@ def check_size_normalization_completion(output_directory_size_normalization):
     return (output_directory_size_normalization / "completed.log").exists()
 
 
-def size_normalization(
-    recording_row,
-    job_directory,
-    output_directory,
-    config_file,
-):
+def size_normalization(recording_row, job_directory, output_directory, config_file):
 
     # load config
     config_file = Path(config_file)
@@ -49,10 +44,24 @@ def size_normalization(
         Path(recording_row.calibration_location_on_o2) / recording_row.calibration_id
     )
 
+    # check if an id
+    if "size_normalization_id" in config["size_normalization"]:
+        size_normalization_id = config["size_normalization"]["size_normalization_id"]
+    else:
+        size_normalization_id = None
+
     # where to save output
-    output_directory_size_normalization = (
-        output_directory / "size_normalization" / recording_row.video_recording_id
-    )
+    if size_normalization_id is None:
+        output_directory_size_normalization = (
+            output_directory / "size_normalization" / recording_row.video_recording_id
+        )
+    else:
+        output_directory_size_normalization = (
+            output_directory
+            / "size_normalization"
+            / size_normalization_id
+            / recording_row.video_recording_id
+        )
     output_directory_size_normalization.mkdir(parents=True, exist_ok=True)
     current_datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     remote_job_directory = job_directory / current_datetime_str

@@ -31,6 +31,7 @@ class KeypointVideoCreator:
         raw_video_directory,
         output_directory_keypoint_vids,
         max_frames=2400,
+        predictions_gimbal_directory=None,
         recompute_completed=False,
     ):
         """
@@ -62,6 +63,10 @@ class KeypointVideoCreator:
         self.predictions_2d_directory = Path(predictions_2d_directory)
         self.predictions_triang_directory = Path(predictions_triang_directory)
         self.camera_calibration_directory = Path(camera_calibration_directory)
+        if predictions_gimbal_directory is None:
+            self.predictions_gimbal_directory = None
+        else:
+            self.predictions_gimbal_directory = Path(predictions_gimbal_directory)
         self.raw_video_directory = Path(raw_video_directory)
         self.output_directory_keypoint_vids = Path(output_directory_keypoint_vids)
         self.max_frames = max_frames
@@ -126,9 +131,22 @@ class KeypointVideoCreator:
         confidences_triang_files = list(
             self.predictions_triang_directory.glob("confidences_3d*.mmap")
         )
+
         assert len(predictions_triang_files) == len(confidences_triang_files) == 1
         self.triang_predictions_file = predictions_triang_files[0]
         self.triang_confidences_file = confidences_triang_files[0]
+
+        if self.predictions_gimbal_directory is None:
+            self.gimbal_predictions_file = None
+        else:
+            predictions_gimbal_files = list(
+                self.predictions_gimbal_directory.glob("gimbal.*.mmap")
+            )
+
+            if len(predictions_gimbal_files) > 0:
+                self.gimbal_predictions_file = predictions_gimbal_files[0]
+            else:
+                self.gimbal_predictions_file = None
 
     def load_2D_predictions(self):
         # Load up to max_frames of 2D predictions
@@ -173,6 +191,7 @@ class KeypointVideoCreator:
         keypoint_coords = load_memmap_from_filename(
             self.triang_predictions_file
         )  # shape: (n_frames, n_keypoints, 3)
+
         keypoint_conf = load_memmap_from_filename(self.triang_confidences_file)
         for iCamera, camera in enumerate(self.cameras):
             these_coords_3D = keypoint_coords[: self.max_frames, :, :]
@@ -191,6 +210,26 @@ class KeypointVideoCreator:
                 "keypoint_coords": these_coords_2D,
                 "keypoint_conf": these_confs,
             }
+        if self.gimbal_predictions_file is not None:
+            self.predictions_gimbal = {}
+            gimbal_coords = load_memmap_from_filename(self.gimbal_predictions_file)
+            for iCamera, camera in enumerate(self.cameras):
+                these_coords_3D = gimbal_coords[: self.max_frames, :, :]
+                these_confs = keypoint_conf[: self.max_frames, :]
+
+                # Reproject the coords into 2D
+                extrinsics = self.all_extrinsics[iCamera]
+                camera_matrix, dist_coefs = self.all_intrinsics[iCamera]
+                these_coords_2D = mcc.project_points(
+                    these_coords_3D,
+                    extrinsics=extrinsics,
+                    camera_matrix=camera_matrix,
+                    dist_coefs=dist_coefs,
+                )
+                self.predictions_gimbal[camera] = {
+                    "keypoint_coords": these_coords_2D,
+                    "keypoint_conf": these_confs,
+                }
 
     def create_2D_keypoint_conf_plots(self):
         # import pdb; pdb.set_trace()
@@ -245,6 +284,21 @@ class KeypointVideoCreator:
                 max_frames=self.max_frames,
             )
 
+            if self.predictions_gimbal is not None:
+                keypoint_coords = self.predictions_gimbal[camera]["keypoint_coords"]
+                keypoint_conf = self.predictions_gimbal[camera]["keypoint_conf"]
+
+                generate_keypoint_video(
+                    output_directory=self.output_directory_keypoint_vids,
+                    video_path=self.video_files[camera],
+                    keypoint_coords=keypoint_coords,
+                    keypoint_conf=keypoint_conf,
+                    keypoint_info=dataset_info["keypoint_info"],
+                    vid_suffix="with_gimbal_keypoints",
+                    skeleton_info=dataset_info["skeleton_info"],
+                    max_frames=self.max_frames,
+                )
+
     def crop_and_stitch_2D_keypoint_videos(self):
         bbox_coords_by_camera = {
             camera: self.predictions_2d[camera]["detection_coords"] for camera in self.cameras
@@ -273,6 +327,23 @@ class KeypointVideoCreator:
             bbox_crop_size=(400, 400),
             max_frames=self.max_frames,
         )
+
+        if self.predictions_gimbal is not None:
+            # Use the centroid of the gimbal'd kps as the center of the bbox
+            detection_coords_by_camera = {}
+            for camera in self.cameras:
+                reproj_coords = self.predictions_gimbal[camera]["keypoint_coords"]
+                centroids = np.nanmean(reproj_coords, axis=1)
+                centroids = nan_to_preceding(centroids)
+                detection_coords_by_camera[camera] = centroids
+
+            crop_and_stich_vids(
+                output_directory=self.output_directory_keypoint_vids,
+                single_vid_suffix="with_gimbal_keypoints",  # Suffix to identify the single videos to be stitched together
+                detection_coords_by_camera=detection_coords_by_camera,
+                bbox_crop_size=(400, 400),
+                max_frames=self.max_frames,
+            )
 
     def run(self):
         # Check if already completed

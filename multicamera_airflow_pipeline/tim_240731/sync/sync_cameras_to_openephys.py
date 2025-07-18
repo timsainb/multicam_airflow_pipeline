@@ -12,6 +12,7 @@ import sys
 import tempfile
 import shutil
 import re
+
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.info(f"Python interpreter binary location: {sys.executable}")
@@ -199,14 +200,6 @@ class OpenEphysSynchronizer:
             test = np.abs((frames_skipped_int - frames_skipped))
             assert np.max(np.abs(test)) < 0.1
 
-            # Ensure all frame skips match expected samplerate
-            frames_skipped = (
-                np.diff(npx_sample_numbers_remapped) / self.npx_samplerate * self.camera_samplerate
-            )
-            frames_skipped_int = np.round(frames_skipped).astype(int)
-            test = np.abs((frames_skipped_int - frames_skipped))
-            assert np.max(np.abs(test)) < 0.1
-
             camera_frame_states = self.camera_sync_df.trigger_states.values
             camera_frame_numbers = self.camera_sync_df.index.values
             camera_datetimes = self.camera_sync_df.datetime_est.values
@@ -227,17 +220,33 @@ class OpenEphysSynchronizer:
             search_mask = (signal1_timestamps >= search_window[0]) & (
                 signal1_timestamps <= search_window[1]
             )
-            search_start = np.where(search_mask)[0][0]
+            if search_mask.sum() != 0:
+                search_start = np.where(search_mask)[0][0]
 
-            # drag a sliding window to find when the random state matches
-            correlations = sliding_correlation(
-                signal2_states[: self.frame_window],
-                signal1_states[search_mask],
-            )
+                # drag a sliding window to find when the random state matches
+                correlations = sliding_correlation(
+                    signal2_states[: self.frame_window],
+                    signal1_states[search_mask],
+                )
+            else:
+                logger.info(f"\t NO CORRELATION FOUND, retrying by searching first 10k samples")
+                correlations = 0
+
+            # Try a different search window if the first one fails (just look at the first 10k samples)
+            if np.max(correlations) < 0.9:
+                logger.info(f"NO CORRELATION FOUND, retrying by searching first 10k samples")
+                search_mask = np.zeros(len(signal1_timestamps)).astype(bool)
+                search_mask[:10000] = True
+                search_start = np.where(search_mask)[0][0]
+                # drag a sliding window to find when the random state matches
+                correlations = sliding_correlation(
+                    signal2_states[: self.frame_window],
+                    signal1_states[search_mask],
+                )
 
             # ensure we found a match
             if np.max(correlations) < 0.9:
-                print(f"\t NO CORRELATION FOUND {np.max(correlations)}")
+                logger.info(f"\t NO CORRELATION FOUND {np.max(correlations)}")
                 return
 
             # grab the point of match
@@ -259,6 +268,10 @@ class OpenEphysSynchronizer:
                 state == signal1_states[position + start_position]
                 for position, state in enumerate(signal2_states)
             ]
+            logger.info(
+                f"\t {np.sum(matches) / len(matches) * 100:.2f}% of frames match between camera and npx"
+            )
+            # TODO: check that everything is aligned across the whole recording
 
             logger.info(f"\t creating ephys alignment mmap")
 
@@ -279,11 +292,8 @@ class OpenEphysSynchronizer:
                         memmap_array[i] = signal2_frames[i - start_position]
 
             # move the incomplete file to the complete file
-            #Path(incomplete_file_name).rename(ephys_alignment_file)
-            shutil.move(
-                incomplete_file_name,
-                ephys_alignment_file
-            )
+            # Path(incomplete_file_name).rename(ephys_alignment_file)
+            shutil.move(incomplete_file_name, ephys_alignment_file)
 
             # ensure memmap array is properly synchronized
             start = 10000

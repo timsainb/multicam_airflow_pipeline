@@ -7,6 +7,7 @@ from datetime import datetime
 import logging
 import sys
 import numpy as np
+import re
 
 from multicamera_airflow_pipeline.tim_240731.airflow.jobs.o2 import (
     sync_cameras,
@@ -97,7 +98,7 @@ class AirflowDAG:
         # remove missing data
         self.recording_df[
             np.any(
-                self.recording_df[["date", "video_recording_id", "calibration_id"]].isnull().values
+                self.recording_df[["video_recording_id", "calibration_id"]].isnull().values
                 == False,
                 axis=1,
             )
@@ -116,16 +117,10 @@ class AirflowDAG:
             rig = recording_row["Rig"]
             dag_id = f"{self.pipeline_name}_{subject_id}_{video_recording_id}"
             logger.info(f"Attempting to create DAG {dag_id}")
-            
-                #raise ValueError(f"Invalid value for use_local in row {idx} {recording_row.use_local}")
-
-            ### SPECIFIC TO TIMS RIG/PIPELINE
-            #if rig == 1:
-            #    reorder_dims = [0, 2, 1]
-            #    flip_z = True
-            #else:
-            #    reorder_dims = [0, 2, 1]
-            #    flip_z = False
+            # Validate dag_id
+            if not re.match(r"^[\w.-]+$", dag_id):
+                print(f"Skipping invalid dag_id: {dag_id}")
+                continue  # skip this loop iteration if dag_id is invalid
 
             with DAG(
                 dag_id=dag_id,

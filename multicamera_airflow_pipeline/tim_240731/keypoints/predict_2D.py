@@ -44,6 +44,7 @@ class Inferencer2D:
         ignore_log_files=False,
         recompute_completed=False,
         is_local=False,
+        pad_bbox=None,
     ):
 
         self.n_keypoints = n_keypoints
@@ -66,6 +67,7 @@ class Inferencer2D:
         self.recompute_completed = recompute_completed
         self.ignore_log_files = ignore_log_files
         self.is_local = is_local
+        self.pad_bbox = pad_bbox
 
         # get the device
         cuda_available = torch.cuda.is_available()
@@ -167,6 +169,7 @@ class Inferencer2D:
                             n_motpy_tracks=self.n_motpy_tracks,
                             use_tensorrt=self.use_tensorrt,
                             total_frames=self.expected_video_length_frames,
+                            pad_bbox=self.pad_bbox,
                         )
                         # when completed, move to output file
                         shutil.copy(temp_h5_path, output_h5_file)
@@ -287,11 +290,64 @@ def predict_video(
     n_motpy_tracks=3,
     use_tensorrt=False,
     copy_video_locally=False,
+    pad_bbox=None,
+    smooth_bbox=True,
 ):
+    """
+    Process a video to predict animal detection and keypoint locations.
+
+    For each frame, the detector finds animal bounding boxes and the pose estimator predicts
+    keypoints. If `pad_bbox` is provided (e.g. 0.2 for 20% padding), the detected bounding box is
+    enlarged by that fraction (on all sides) to include additional context. For the version that does
+    not use MOTPY tracking (i.e. use_motpy is False), the bounding box is temporally smoothed using
+    an exponential moving average weighted by the detection (bounding box) confidence.
+
+    TODO: update motpy to also smooth and pad bbox
+
+    Parameters:
+      video_path: Path to the input video.
+      output_h5_file: Path to the output .h5 file.
+      tensorrt_detection_model_path: Path to the tensorrt detection model.
+      tensorrt_pose_estimator_path: Path to the tensorrt pose estimator.
+      pose_estimator_config: Path to the pose estimator config.
+      pose_estimator_checkpoint: Path to the pose estimator checkpoint.
+      detector_config: Path to the detector config.
+      detector_checkpoint: Path to the detector checkpoint.
+      n_keypoints: Number of keypoints predicted.
+      detection_interval: Process every Nth frame.
+      n_animals: Number of animals to detect.
+      total_frames: Total number of frames (if known).
+      use_motpy: Whether to use MOTPY tracking.
+      n_motpy_tracks: Number of MOTPY tracks.
+      use_tensorrt: Whether to use tensorrt.
+      copy_video_locally: Whether to copy the video locally before processing.
+      pad_bbox: Fraction by which to pad the bounding box (e.g. 0.2 for 20% expansion).
+      smooth_bbox: Whether to smooth the bounding box using an exponential moving average.
+    """
     from motpy import Detection, MultiObjectTracker
     from mmpose.apis import inference_topdown
     from mmdet.apis import inference_detector
     import torch
+
+    # Helper: pad a bounding box.
+    def apply_bbox_padding(frame, bbox, pad_fraction):
+        x1, y1, x2, y2 = bbox
+        w = x2 - x1
+        h = y2 - y1
+        x1_new = x1 - pad_fraction * w / 2
+        y1_new = y1 - pad_fraction * h / 2
+        x2_new = x2 + pad_fraction * w / 2
+        y2_new = y2 + pad_fraction * h / 2
+        frame_h, frame_w = frame.shape[:2]
+        x1_new = max(0, x1_new)
+        y1_new = max(0, y1_new)
+        x2_new = min(frame_w, x2_new)
+        y2_new = min(frame_h, y2_new)
+        return [x1_new, y1_new, x2_new, y2_new]
+
+    # Helper: update bounding box with EMA using detection confidence.
+    def ema_bbox(filtered_box, current_box, confidence):
+        return confidence * np.array(current_box) + (1 - confidence) * np.array(filtered_box)
 
     video_path = Path(video_path)
     if not video_path.exists():
@@ -305,6 +361,10 @@ def predict_video(
         detector, pose_estimator = load_models(
             pose_estimator_config, pose_estimator_checkpoint, detector_config, detector_checkpoint
         )
+
+    # For non-MOTPY processing, initialize the filtered bounding box variable.
+    if not use_motpy:
+        filtered_bbox = None
 
     # TODO copy the video over locally to tmp (using tempfile) to avoid issues with remote file systems
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
@@ -353,6 +413,9 @@ def predict_video(
             missing_detections = np.zeros((total_frames, n_animals, 1))
 
             assert n_motpy_tracks >= n_animals
+        else:
+            if n_animals > 1:
+                raise ValueError("MOTPY tracking requires n_animals to be 1")
 
         n_frames = 0
         for frame_id in tqdm(range(total_frames), leave=False, desc="frames", miniters=10000):
@@ -424,12 +487,28 @@ def predict_video(
                         ]
 
             else:
-                # poses = pose_detector(frame, bboxes[:n_animals, :4].astype(int))
-                predictions = inference_topdown(pose_estimator, img=frame, bboxes=bboxes)
+
+                # For a single animal, update the bounding box with padding.
+                if pad_bbox is not None:
+                    bboxes[0] = apply_bbox_padding(frame, bboxes[0], pad_bbox)
+
+                if smooth_bbox:
+                    if filtered_bbox is None:
+                        filtered_bbox = bboxes[0]
+                    else:
+                        filtered_bbox = ema_bbox(filtered_bbox, bboxes[0], conf[0])
+                if use_tensorrt:
+                    poses = pose_estimator(frame, np.expand_dims(filtered_bbox, -1).astype(int))
+                    keypoint_coords[frame_id] = poses[:n_animals, :, :2]
+                    keypoint_conf[frame_id] = poses[:n_animals, :, 2]
+                else:
+                    predictions = inference_topdown(pose_estimator, img=frame, bboxes=bboxes)
+                    keypoint_coords[frame_id, 0, :, :2] = predictions[0].pred_instances.keypoints[
+                        0
+                    ]
+                    keypoint_conf[frame_id, 0] = predictions[0].pred_instances.keypoint_scores[0]
                 detection_coords[frame_id] = bboxes[:n_animals]
                 detection_conf[frame_id] = conf[:n_animals]
-                keypoint_coords[frame_id, i, :, :2] = predictions[i].pred_instances.keypoints[0]
-                keypoint_conf[frame_id, i] = predictions[i].pred_instances.keypoint_scores[0]
             n_frames += 1
 
         # stop reading the video

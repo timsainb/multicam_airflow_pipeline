@@ -140,10 +140,10 @@ class CameraSynchronizer:
             cap.release()
         # check if fps matches the expected fps, within 1 fps
         if np.all(np.abs(np.array(fps) - self.samplerate) < 1):
-            return True
+            return True, fps
         else:
             logger.info(f"Expected FPS: {self.samplerate}, Found FPS: {fps}")
-            return False
+            return False, fps
 
     def run(self):
 
@@ -153,7 +153,8 @@ class CameraSynchronizer:
                 logger.info("Sync already completed")
                 return
 
-        assert self.check_if_correct_fps(), "Incorrect FPS detected"
+        correct_fps, fps = self.check_if_correct_fps()
+        assert correct_fps, f"Incorrect FPS detected: {fps}. Expected: {self.samplerate}."
 
         # load the config and triggerdata files
         logger.info("Loading video config, metadata, and triggerdata")

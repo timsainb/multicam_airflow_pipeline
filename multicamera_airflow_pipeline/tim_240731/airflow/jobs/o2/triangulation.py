@@ -133,6 +133,7 @@ def triangulation(
         camera_sync_file = params['camera_sync_file'],
         expected_frames_per_video = params['expected_frames_per_video'],
         camera_calibration_directory = params['camera_calibration_directory'],
+        n_frames=None,
         **config["triangulation"]
     )
     triangulator.run()
