@@ -201,7 +201,7 @@ o2:
     conda_env: "/n/groups/datta/tim_sainburg/conda_envs/kpms"
   
   triangulation:
-    o2_memory: "32G"
+    o2_memory: "16G"
     o2_n_cpus: 10
     o2_queue: "short,priority"
     o2_runtime_multiplier: 2

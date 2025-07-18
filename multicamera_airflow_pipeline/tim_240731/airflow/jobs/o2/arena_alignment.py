@@ -38,6 +38,8 @@ def arena_alignment(
     job_directory,
     output_directory,
     config_file,
+    reorder_dims=[0, 1, 2],
+    flip_z=False,
 ):
     # load config
     config_file = Path(config_file)
@@ -64,11 +66,26 @@ def arena_alignment(
         else:
             logger.info("arena_alignment not complete, starting")
 
-    predictions_3d_file = list(
-        (output_directory / "size_normalization" / recording_row.video_recording_id).glob(
-            "size_norm.*.mmap"
-        )
-    )[0]
+    if "size_normalization_id" in config["size_normalization"]:
+        size_normalization_id = config["size_normalization"]["size_normalization_id"]
+    else:
+        size_normalization_id = None
+
+    if size_normalization_id is None:
+        predictions_3d_file = list(
+            (output_directory / "size_normalization" / recording_row.video_recording_id).glob(
+                "size_norm.*.mmap"
+            )
+        )[0]
+    else:
+        predictions_3d_file = list(
+            (
+                output_directory
+                / "size_normalization"
+                / size_normalization_id
+                / recording_row.video_recording_id
+            ).glob("size_norm.*.mmap")
+        )[0]
 
     assert predictions_3d_file.exists()
 
@@ -111,6 +128,8 @@ def arena_alignment(
     arena_aligner = ArenaAligner(
         predictions_3d_file = params['predictions_3d_file'],
         arena_alignment_output_directory = params['arena_alignment_output_directory'],
+        reorder_dims = {reorder_dims},
+        flip_z = {flip_z},
         **config["arena_alignment"]
     )
     arena_aligner.run()

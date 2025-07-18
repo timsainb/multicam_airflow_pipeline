@@ -6,6 +6,7 @@ import yaml
 import logging
 import sys
 import cv2
+from multicamera_airflow_pipeline.utils.datetime_utils import extract_datetime_from_folder_name
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -38,9 +39,11 @@ class CameraSynchronizer:
         # get the expected interval between frames (in microseconds)
         self.isi_uS = 1 / self.samplerate * 1000 * 1000
         # get recording start time
-        self.recording_start = datetime.strptime(
-            self.recording_directory.name, "%y-%m-%d-%H-%M-%S-%f"
-        )
+        # self.recording_start = datetime.strptime(
+        # self.recording_directory.name, "%y-%m-%d-%H-%M-%S-%f"
+        # )
+        self.recording_start = extract_datetime_from_folder_name(self.recording_directory.name)
+
         self.recompute_completed = recompute_completed
 
     def check_completed(self):
@@ -60,8 +63,8 @@ class CameraSynchronizer:
     def estimate_total_frames_from_metadata(self):
         first_camera = self.metadata_csvs_df.iloc[0].camera
         camera_metadata_csvs = self.metadata_csvs_df[
-                self.metadata_csvs_df.camera == first_camera
-            ].sort_values(by="frame")
+            self.metadata_csvs_df.camera == first_camera
+        ].sort_values(by="frame")
         final_metadata_csv = camera_metadata_csvs.iloc[-1].csv_loc
         final_metadata_df = pd.read_csv(final_metadata_csv, header=0)
         final_start_frame = camera_metadata_csvs.iloc[0].frame
@@ -71,9 +74,7 @@ class CameraSynchronizer:
 
     def make_fictive_triggerdata(self):
         self.trigger_times = np.round(
-            np.arange(
-                0, self.estimate_total_frames_from_metadata() * self.isi_uS, self.isi_uS
-            ),
+            np.arange(0, self.estimate_total_frames_from_metadata() * self.isi_uS, self.isi_uS),
             0,
         ).astype(int)
         self.trigger_states = np.zeros(len(self.trigger_times)).astype(int)
@@ -90,7 +91,7 @@ class CameraSynchronizer:
             times, pins, states = np.loadtxt(triggerdata_csv, delimiter=",", skiprows=1).T
             self.trigger_times = times[pins == self.trigger_pin]
             self.trigger_states = states[pins == self.trigger_pin].astype(int)
-            if isempty(self.trigger_times):
+            if len(self.trigger_times) == 0:
                 self.make_fictive_triggerdata()
                 logger.info("Wrong trigger pin assigned")
 
@@ -101,7 +102,9 @@ class CameraSynchronizer:
             raise ValueError(f"Skipped frames in microcontroller trigger: {max_skip}")
 
         # get recording length in hours
-        self.recording_length_hours = round(len(self.trigger_times) / self.samplerate / 60 / 60, 5)  # not used
+        self.recording_length_hours = round(
+            len(self.trigger_times) / self.samplerate / 60 / 60, 5
+        )  # not used
 
         # create a pandas dataframe populated by frame number, arduino time, and trigger state
         self.frame_df = pd.DataFrame(
@@ -137,10 +140,10 @@ class CameraSynchronizer:
             cap.release()
         # check if fps matches the expected fps, within 1 fps
         if np.all(np.abs(np.array(fps) - self.samplerate) < 1):
-            return True
+            return True, fps
         else:
             logger.info(f"Expected FPS: {self.samplerate}, Found FPS: {fps}")
-            return False
+            return False, fps
 
     def run(self):
 
@@ -150,11 +153,12 @@ class CameraSynchronizer:
                 logger.info("Sync already completed")
                 return
 
-        assert self.check_if_correct_fps(), "Incorrect FPS detected"
+        correct_fps, fps = self.check_if_correct_fps()
+        assert correct_fps, f"Incorrect FPS detected: {fps}. Expected: {self.samplerate}."
 
         # load the config and triggerdata files
         logger.info("Loading video config, metadata, and triggerdata")
-        self.load_config()
+        # self.load_config()
         self.load_metadata()
         self.load_triggerdata()
 

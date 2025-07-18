@@ -28,7 +28,7 @@ from gimbal.fit import em_step
 from jax import lax, jit
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 from jax.lib import xla_bridge
 
@@ -542,6 +542,20 @@ def generate_gimbal_params(
 
 
 def generate_initial_positions(positions):
+    # ensure the boundaries are not zeros
+    positions_fixed = copy.deepcopy(positions)
+    # ensure that the bounds are not zeros
+    positions_mean = np.mean(positions_fixed, axis=(1, 2))
+    # if the endpoints are bound by zeros, there will be an estimation error
+    if positions_mean[-1] == 0:
+        last_good_index = np.where(positions_mean != 0)[-1][-1]
+        positions_fixed[0] = positions[last_good_index]
+    # if the endpoints are bound by zeros, there will be an estimation error
+    if positions_mean[0] == 0:
+        first_good_index = np.where(positions_mean != 0)[0][0]
+        positions_fixed[-1] = positions[first_good_index]
+
+    # fill with interpolations where needed
     init_positions = np.zeros_like(positions)
     for k in range(positions.shape[1]):
         ix = np.nonzero(~np.isnan(positions[:, k, 0]))[0]
@@ -549,6 +563,7 @@ def generate_initial_positions(positions):
             init_positions[:, k, i] = np.interp(
                 np.arange(positions.shape[0]), ix, positions[:, k, i][ix]
             )
+
     return init_positions
 
 

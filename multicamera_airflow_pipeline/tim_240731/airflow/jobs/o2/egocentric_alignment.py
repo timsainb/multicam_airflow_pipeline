@@ -71,11 +71,26 @@ def egocentric_alignment(
         else:
             logger.info("egocentric_alignment incomplete, starting")
 
-    predictions_3d_file = list(
-        (output_directory / "size_normalization" / recording_row.video_recording_id).glob(
-            "size_norm.*.mmap"
-        )
-    )[0]
+    if "size_normalization_id" in config["size_normalization"]:
+        size_normalization_id = config["size_normalization"]["size_normalization_id"]
+    else:
+        size_normalization_id = None
+
+    if size_normalization_id is None:
+        predictions_3d_file = list(
+            (output_directory / "size_normalization" / recording_row.video_recording_id).glob(
+                "size_norm.*.mmap"
+            )
+        )[0]
+    else:
+        predictions_3d_file = list(
+            (
+                output_directory
+                / "size_normalization"
+                / size_normalization_id
+                / recording_row.video_recording_id
+            ).glob("size_norm.*.mmap")
+        )[0]
 
     assert predictions_3d_file.exists()
 

@@ -82,7 +82,7 @@ class EgocentricAligner:
         logger.info(f"\t Data length: {self.n_data}")
 
         # ensure that there are no nans in the input
-        assert np.any(np.isnan(self.predictions_3D_mmap)) == False, "nans in poses"
+        #assert np.any(np.isnan(self.predictions_3D_mmap)) == False, "nans in poses"
 
         keypoints = np.array(list(kpt_dict.keys()))
         if self.plot_steps:
@@ -107,10 +107,12 @@ class EgocentricAligner:
             temp_aligned_poses_file = self.initialize_output(tmpdir_path)
 
             # prepopulate batch with unmodified data
-            for batch in tqdm(range(self.n_batches), desc="performing alignment"):
+            for batch in tqdm(range(self.n_batches), desc="performing alignment", leave=False):
                 batch_start = self.batch_size * batch
                 batch_end = self.batch_size * (batch + 1)
                 coordinates = np.array(self.predictions_3D_mmap)[batch_start:batch_end]
+                # fill in any nans that might exist
+                coordinates = fill_nans(coordinates)
                 aligned_poses = align_poses(
                     coordinates,
                 )
@@ -484,3 +486,15 @@ def align_poses_nonrigid(poses):
     rotated_poses = standardize_poses(poses, front_keypoint_indices, back_keypoint_indices)
 
     return rotated_poses
+
+def fill_nans(positions):
+    """Fill in nans in the positions by linear interpolation.
+    """
+    init_positions = np.zeros_like(positions)
+    for k in range(positions.shape[1]):
+        ix = np.nonzero(~np.isnan(positions[:,k,0]))[0]
+        for i in range(positions.shape[2]):
+            init_positions[:,k,i] = np.interp(
+                np.arange(positions.shape[0]),
+                ix, positions[:,k,i][ix])
+    return init_positions

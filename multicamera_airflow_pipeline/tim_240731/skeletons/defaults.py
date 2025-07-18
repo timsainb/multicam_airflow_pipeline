@@ -22,8 +22,64 @@ keypoints = np.array(keypoints)
 keypoints_order = keypoints
 kpt_dict = {j: i for i, j in enumerate(keypoints_order)}
 
+default_template_bone_length_mean = c57_template_bone_length_mean = {
+    "nose_tip": 16.4,
+    "left_ear": 15.1,
+    "right_ear": 15.1,
+    "left_eye": 7.1,
+    "right_eye": 7.1,
+    "throat": 16.0,
+    "forehead": 18.3,
+    "left_shoulder": 14.4,
+    "right_shoulder": 14.4,
+    "left_elbow": 10.9,
+    "right_elbow": 10.9,
+    "left_wrist": 7.7,
+    "right_wrist": 7.7,
+    "left_hind_paw_front": 12.5,
+    "right_hind_paw_front": 12.5,
+    "left_hind_paw_back": 13.7,
+    "right_hind_paw_back": 13.7,
+    "left_knee": 19.5,
+    "right_knee": 19.5,
+    "tail_base": 13.0,
+    "spine_low": 20.6,
+    "spine_mid": 9.8,
+    "spine_high": 9.8,
+    "left_fore_paw": 4.6,
+    "right_fore_paw": 4.6,
+}
+
+default_template_bone_length_std = c57_template_bone_length_std = {
+    "nose_tip": 1.2,
+    "left_ear": 0.8,
+    "right_ear": 0.8,
+    "left_eye": 0.4,
+    "right_eye": 0.4,
+    "throat": 1.3,
+    "forehead": 1.4,
+    "left_shoulder": 1.3,
+    "right_shoulder": 1.3,
+    "left_elbow": 1.3,
+    "right_elbow": 1.3,
+    "left_wrist": 0.9,
+    "right_wrist": 0.9,
+    "left_hind_paw_front": 0.8,
+    "right_hind_paw_front": 0.8,
+    "left_hind_paw_back": 0.8,
+    "right_hind_paw_back": 0.8,
+    "left_knee": 1.2,
+    "right_knee": 1.2,
+    "tail_base": 0.7,
+    "spine_low": 1.4,
+    "spine_mid": 0.8,
+    "spine_high": 0.8,
+    "left_fore_paw": 0.6,
+    "right_fore_paw": 0.6,
+}
+
 # all mice will be projected into this template
-default_template_bone_length_mean = {
+OLD_default_template_bone_length_mean = {
     "nose_tip": 19.3,
     "left_ear": 17.9,
     "right_ear": 17.9,
@@ -50,7 +106,7 @@ default_template_bone_length_mean = {
     "left_fore_paw": 4.8,
     "right_fore_paw": 4.8,
 }
-default_template_bone_length_std = {
+OLD_default_template_bone_length_std = {
     "nose_tip": 1.3,
     "left_ear": 1.1,
     "right_ear": 1.1,

@@ -48,10 +48,12 @@ class Triangulator:
         print_nans=True,  # Flag to print NaNs
         mean_filt_samples=11,  # Number of samples for mean filtering (~100ms at 120fps)
         mean_filt_distance_thresh_px=150,  # Distance threshold for mean filtering in pixels
+        perform_leave_one_out_filtering=True,
         perform_top_k_filtering=False,
         recompute_completed=False,
         suppress_assertion=False,
         sub_last_frame=True,
+        n_frames=None,
     ):
         """
         Triangulator class for processing 2D keypoint predictions and generating 3D positions.
@@ -65,6 +67,7 @@ class Triangulator:
         n_jobs (int): Number of parallel jobs. Default is 5.
         keep_top_k (int): Number of top keypoints to keep. Default is 3.
         perform_top_k_filtering (bool): Flag to perform top k filtering. Default is False.
+        perform_leave_one_out_filtering (bool): Flag to perform leave-one-out filtering. Default is False.
         leave_one_out_center_threshold_mm (float): Threshold distance for leave-one-out center in mm. Default is 50.
         threshold_distance_from_parent_mm (float): Threshold distance from parent keypoint in mm. Default is 50.
         mmap_dtype (str): Data type for memory-mapped files. Default is "float32".
@@ -75,7 +78,8 @@ class Triangulator:
         """
         self.predictions_2d_directory = Path(predictions_2d_directory)
         self.output_directory_triangulation = Path(output_directory_triangulation)
-        self.camera_sync_file = Path(camera_sync_file)
+        if camera_sync_file is not None:
+            self.camera_sync_file = Path(camera_sync_file)
         self.camera_calibration_directory = Path(camera_calibration_directory)
         self.expected_frames_per_video = int(expected_frames_per_video)
         self.n_jobs = n_jobs
@@ -90,6 +94,11 @@ class Triangulator:
         self.recompute_completed = recompute_completed
         self.suppress_assertion = suppress_assertion
         self.sub_last_frame = sub_last_frame
+        self.perform_leave_one_out_filtering = perform_leave_one_out_filtering
+        if n_frames is not None:
+            self.n_frames = n_frames
+        else:
+            self.n_frames = None
 
         # Initialize keypoint and skeleton information from dataset_info
         keypoint_info = dataset_info["keypoint_info"]
@@ -120,17 +129,18 @@ class Triangulator:
                 logger.info("Triangulation already exists")
                 return
 
-        # ensure the camera sync already exists
-        if not self.camera_sync_file.exists():
-            raise FileNotFoundError("Camera sync data not found")
+        if self.n_frames is None:
+            # ensure the camera sync already exists
+            if not self.camera_sync_file.exists():
+                raise FileNotFoundError("Camera sync data not found")
 
-        # load the camera sync file
-        #  there currently is one -1 at the end of each camera sync file
-        #  if that gets fixed, we can remove the [:-1]
-        camera_sync_df = pd.read_csv(self.camera_sync_file)
-        self.n_frames = len(camera_sync_df)
-        if self.sub_last_frame:
-            self.n_frames -= 1
+            # load the camera sync file
+            #  there currently is one -1 at the end of each camera sync file
+            #  if that gets fixed, we can remove the [:-1]
+            camera_sync_df = pd.read_csv(self.camera_sync_file)
+            self.n_frames = len(camera_sync_df)
+            if self.sub_last_frame:
+                self.n_frames -= 1
 
         # compute the number of expected videos
         n_videos_expected = round(np.ceil(self.n_frames / self.expected_frames_per_video))
@@ -151,9 +161,10 @@ class Triangulator:
 
         # ensure that we have a complete dataset
         if self.suppress_assertion == False:
+            # print(np.unique(self.recording_predictions.camera.values, return_counts=True))
             assert (
                 int(len(self.recording_predictions) / self.n_cameras) == n_videos_expected
-            ), f"Expected {n_videos_expected} videos, got {int(len(self.recording_predictions) / self.n_cameras)}"
+            ), f"Expected {n_videos_expected} videos per camera ({self.n_cameras} cameras) == {self.n_cameras * n_videos_expected}, got {int(len(self.recording_predictions))}"
 
         # Create a temporary directory
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -214,6 +225,34 @@ class Triangulator:
         detection_coords_chunk = np.zeros((chunk_end - chunk_start, len(self.cameras), 4)) * np.nan
         detection_coords_chunk[:] = np.nan
 
+        # ensure that, for each camera, we have the same number of frames
+        camera_n_frames = {}
+        for ci, camera in enumerate(self.cameras):
+            camera_2d_row = self.recording_predictions[
+                (self.recording_predictions.camera == camera)
+                & (self.recording_predictions.frame == start_frame)
+            ].iloc[0]
+            with h5py.File(camera_2d_row.file, "r") as h5f:
+                camera_n_frames[camera] = len(h5f["keypoint_coords"])
+
+        n_frames = camera_n_frames[camera]
+        for camera in self.cameras:
+            if camera_n_frames[camera] != n_frames:
+                raise ValueError(
+                    "Number of frames for camera {} does not match the expected number of frames {}".format(
+                        camera, n_frames
+                    )
+                )
+        if n_frames < len(positions_2d_chunk):
+            logger.warning(
+                f"WARNING: {camera} has {n_frames} frames, expected {confidences_2d_chunk.shape[0]}"
+            )
+            positions_2d_chunk = positions_2d_chunk[:n_frames]
+            confidences_2d_chunk = confidences_2d_chunk[:n_frames]
+            detection_coords_chunk = detection_coords_chunk[:n_frames]
+            detection_conf_chunk = detection_conf_chunk[:n_frames]
+            chunk_end = chunk_start + n_frames
+
         for ci, camera in enumerate(self.cameras):
             camera_2d_row = self.recording_predictions[
                 (self.recording_predictions.camera == camera)
@@ -231,24 +270,25 @@ class Triangulator:
             detection_conf_chunk[:, ci] = np.squeeze(detection_conf)
         if self.print_nans:
             prop_nan = np.mean(np.isnan(positions_2d_chunk))
-            logger.info(f"\tTotal: Prop 2D keypoints are NaNs: {round(prop_nan, 3)}")
+            logger.info(f"Initial: Prop 2D keypoints are NaNs: {round(prop_nan, 3)}")
 
         # remove keypoints that aren't aligned with other cameras
-        positions_2d_chunk, confidences_2d_chunk = leave_one_out_2d_filter(
-            positions_2d_chunk,
-            self.cameras,
-            detection_coords_chunk,
-            self.all_extrinsics,
-            self.all_intrinsics,
-            confidences_2d_chunk,
-            leave_one_out_center_threshold=self.leave_one_out_center_threshold_mm,
-            n_jobs=self.n_jobs,
-            plot_results=False,
-        )
+        if self.perform_leave_one_out_filtering:
+            positions_2d_chunk, confidences_2d_chunk = leave_one_out_2d_filter(
+                positions_2d_chunk,
+                self.cameras,
+                detection_coords_chunk,
+                self.all_extrinsics,
+                self.all_intrinsics,
+                confidences_2d_chunk,
+                leave_one_out_center_threshold=self.leave_one_out_center_threshold_mm,
+                n_jobs=self.n_jobs,
+                plot_results=False,
+            )
 
         if self.print_nans:
             prop_nan = np.mean(np.isnan(positions_2d_chunk))
-            logger.info(f"\tTotal: Prop 2D keypoints are NaNs: {round(prop_nan, 3)}")
+            logger.info(f"LOO filter: Prop 2D keypoints are NaNs: {round(prop_nan, 3)}")
 
         # compute distance of each point to the median over n samples
         mean_kpt_movement = uniform_filter(
@@ -263,7 +303,7 @@ class Triangulator:
         positions_2d_chunk[np.concatenate([m[:1], m])] = np.nan
         if self.print_nans:
             prop_nan = np.mean(np.isnan(positions_2d_chunk))
-            logger.info(f"\tTotal: Prop 2D keypoints are NaNs: {round(prop_nan, 3)}")
+            logger.info(f"distance filter: Prop 2D keypoints are NaNs: {round(prop_nan, 3)}")
 
         # only keep the top k confidence cameras
         #    generally not needed, since we're weighting by confidence in triangulation
@@ -285,10 +325,9 @@ class Triangulator:
             )
         )
         positions_3D_chunk = np.stack(positions_3D_chunk)
-
         if self.print_nans:
             prop_nan = np.mean(np.isnan(positions_3D_chunk))
-            print(f"\tTotal: Prop 3D keypoints are NaNs: {round(prop_nan, 3)}")
+            logger.info(f"triangulation: Prop 3D keypoints are NaNs: {round(prop_nan, 3)}")
 
         # filter keypoints that are very far from their parent
         positions_3D_chunk = filter_3d_keypoints_based_on_distance_from_parent(
@@ -300,7 +339,7 @@ class Triangulator:
 
         if self.print_nans:
             prop_nan = np.mean(np.isnan(positions_3D_chunk))
-            print(f"\tTotal: Prop 3D keypoints are NaNs: {round(prop_nan, 3)}")
+            logger.info(f"\distance filter: Prop 3D keypoints are NaNs: {round(prop_nan, 3)}")
 
         # get reprojections
         positions_2D_reprojections = np.zeros(positions_2d_chunk.shape) * np.nan
@@ -313,9 +352,9 @@ class Triangulator:
                 camera_matrix=camera_matrix,
                 dist_coefs=dist_coefs,
             )
-        if self.print_nans:
-            prop_nan = np.mean(np.isnan(positions_3D_chunk))
-            print(f"\tTotal: Prop 3D keypoints are NaNs: {round(prop_nan, 3)}")
+        # if self.print_nans:
+        #    prop_nan = np.mean(np.isnan(positions_3D_chunk))
+        #    print(f"\tTotal: Prop 3D keypoints are NaNs: {round(prop_nan, 3)}")
 
         # compute the reprojection errors for each keypoint / camera
         reprojection_errors_chunk = np.sqrt(
@@ -340,6 +379,7 @@ class Triangulator:
         reprojection_errors_file = (
             self.output_directory_triangulation / f"reprojection_errors_{chunk_i}.jpg"
         )
+        reprojection_errors_file.parent.mkdir(exist_ok=True, parents=True)
         plt.savefig(reprojection_errors_file)
         plt.close()
 
@@ -440,6 +480,7 @@ class Triangulator:
     def load_predictions(self):
         # grab all the predictions 2D h5 files
         predictions_2d_files = list(self.predictions_2d_directory.glob("*.h5"))
+        logger.info(f"2D predictions found: {len(predictions_2d_files)}")
         cam = [i.stem.split(".")[1] for i in predictions_2d_files]
         frame = [int(i.stem.split(".")[2]) for i in predictions_2d_files]
         self.recording_predictions = pd.DataFrame(
@@ -450,6 +491,40 @@ class Triangulator:
         ]
         # assert that there is the same number of frames for each camera
         assert same_frames_for_all_cameras(self.recording_predictions)
+
+        # include the number of predictions for each h5 file
+        logger.info("Counting number of predictions for each camera")
+        n_camera_frames = []
+        for idx, camera_2d_row in self.recording_predictions.iterrows():
+            with h5py.File(camera_2d_row.file, "r") as h5f:
+                n_camera_frames.append(len(h5f["keypoint_coords"]))
+        self.recording_predictions["n_predictions"] = n_camera_frames
+        # ensure that the number of frames is the same for each camera
+        camera_predictions = self.recording_predictions.pivot(
+            index="frame", columns="camera", values="n_predictions"
+        ).reset_index()
+        # check that the number of predictions is the same for each camera
+        predictions_matches_first_camera = (
+            camera_predictions[self.cameras].values
+            == camera_predictions[self.cameras].values[:, 0][:, np.newaxis]
+        )
+        if not np.all(predictions_matches_first_camera):
+            # state which cameras / frames do not match
+            mismatched_cameras = camera_predictions.loc[
+                ~np.all(predictions_matches_first_camera, axis=1)
+            ]
+            logger.error(
+                "Mismatched predictions for cameras and frames:\n"
+                + mismatched_cameras.to_string(index=True, header=True)
+            )
+            raise ValueError(
+                "Number of predictions for each camera does not match the first camera"
+                + "\n"
+                + "This could either be because the video doesn't contain the correct number of frames,"
+                + " or because for the mismatched video, the 2d prediction was interrupted in some unexpected way."
+                + "\n See error message above for which videos and frames do not match."
+                + "\n You can look at the number of actual frames in the video to confirm."
+            )
 
 
 def filter_3d_keypoints_based_on_distance_from_parent(
@@ -532,9 +607,9 @@ def same_frames_for_all_cameras(df):
         return True
     else:
         # Print the cameras with different frames
-        logger.info("Different frames for cameras")
+        logger.error("Different frames for cameras")
         for camera, frames in camera_frames.items():
-            logger.info(f"{camera}: {frames}")
+            logger.info(f"{camera}:({len(frames)}) {frames}")
         return False
 
 

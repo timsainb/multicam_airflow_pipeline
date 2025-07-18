@@ -54,6 +54,7 @@ class SizeNormalizer:
         plot_steps=True,
         recompute_completed=False,
         assert_completed=True,
+        **kwargs,
     ):
 
         self.predictions_3d_file = Path(predictions_3d_file)

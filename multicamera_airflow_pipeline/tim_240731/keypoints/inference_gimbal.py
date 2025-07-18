@@ -31,7 +31,7 @@ from gimbal.fit import em_step
 from jax import lax, jit
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 from jax.lib import xla_bridge
 
@@ -57,15 +57,9 @@ from .train_gimbal import (
     get_edges,
     build_node_hierarchy,
     generate_initial_positions,
-    # vector_to_angle,
-    # angle_to_rotation_matrix,
     standardize_poses,
-    compute_directions,
-    # fit_gimbal_model,
     load_memmap_from_filename,
-    generate_initial_positions,
     generate_outlier_probs,
-    # em_movMF,
     skeleton,
 )
 
@@ -107,6 +101,7 @@ class GimbalInferencer:
         recompute_completed=False,
         plot_progress=False,
         testing=False,
+        resume_completed=True,
     ):
         self.gimbal_output_directory = Path(gimbal_output_directory)
         self.predictions_3d_directory = Path(predictions_3d_directory)
@@ -131,6 +126,8 @@ class GimbalInferencer:
         self.recompute_completed = recompute_completed
         self.testing = testing
         self.plot_progress = plot_progress
+        self.resume_completed = resume_completed  # if a completed.log file exists,
+        #   but the success bool is not all 1, then resume from where it left off
 
         if self.testing:
             logger.warning("Testing mode is on. Only running on first 10k samples.")
@@ -149,6 +146,10 @@ class GimbalInferencer:
         self.load_calibration_data()
         self.load_predictions()
         self.load_gimbal_params()
+
+        # load the success file if we want to resume gimbal from where it failed last time
+        if self.resume_completed:
+            self.load_success_file()
 
         # get camera matrices in gimbal format
         self.camera_matrices = np.array(
@@ -210,9 +211,16 @@ class GimbalInferencer:
                 self.gimbal_output_directory / temp_gimbal_success_file.name,
             )
 
-        # create a log file to indicate completion
-        with open(self.gimbal_output_directory / "completed.log", "w") as f:
-            f.write("completed")
+        # if there are no zeros in the gimbal success array, then we can assume that the gimbal
+        # inference was successful
+        if np.all(self.gimbal_success == 1):
+            # create a log file to indicate completion
+            with open(self.gimbal_output_directory / "completed.log", "w") as f:
+                f.write("completed")
+        else:
+            raise RuntimeError(
+                "Gimbal inference failed. Please check the logs for more information."
+            )
 
     def infer_batch(self, batch):
 
@@ -225,17 +233,33 @@ class GimbalInferencer:
         positions_2D = np.array(self.predictions_2D_mmap[batch_start:batch_end])
         # confidences_3D = np.array(self.confidences_3D_mmap[batch_start:batch_end])
         positions_3D = np.array(self.predictions_3D_mmap[batch_start:batch_end])
+        positions_3D[positions_3D == 0] = np.nan
         reprojection_errors = np.array(self.reprojection_errors_mmap[batch_start:batch_end])
-        confidences_2D.shape
+
+        # load success batch
+        if self.resume_completed:
+            if self.gimbal_success_loaded is not None:
+                gimbal_success_batch = np.array(self.gimbal_success_loaded[batch_start:batch_end])
+                gimbal_batch = np.array(self.gimbal_loaded[batch_start:batch_end])
+                if np.all(gimbal_success_batch == 1):
+                    logger.info(f"Batch {batch} already completed. Skipping.")
+
+                    # populate
+                    self.gimbal_output[batch_start:batch_end] = gimbal_batch
+                    self.gimbal_success[batch_start:batch_end] = 1
+
+                    return
+                else:
+                    logger.info(f"Resuming batch {batch}")
 
         # re-order 2d
         confidences_2D = confidences_2D  # [:, camera_reorder_2d]
         positions_2D = positions_2D  # [:, camera_reorder_2d]
 
-        # remove outliers
+        # remove outliers keypoints (relative to centroid)
         outlier_pts = np.sqrt(
             np.sum(
-                (positions_3D - np.expand_dims(np.median(positions_3D, axis=1), 1)) ** 2,
+                (positions_3D - np.expand_dims(np.nanmedian(positions_3D, axis=1), 1)) ** 2,
                 axis=(2),
             )
         )
@@ -289,14 +313,21 @@ class GimbalInferencer:
         # calculate probabilies that datapoint is noise
         outlier_prob = generate_outlier_probs(
             confidence,
-            outlier_prob_bounds=[1e-6, 1 - 1e-6],
+            outlier_prob_bounds=[1e-2, 1 - 1e-2],
             conf_sigmoid_center=self.conf_sigmoid_center,
             conf_sigmoid_gain=self.conf_sigmoid_gain,  # 20
         )
-
+        # FIX ME: this should reflect the camera image dimensions
         # remove out of frame predictions
         observations[observations < 0] = 0
         observations[observations > 2000] = 2000
+
+        # ensure there are no zeros, which will lead to NaNs in training
+        poses_mean = np.mean(init_positions, axis=(1, 2))
+        init_positions[poses_mean == 0] = np.nan
+        init_positions = generate_initial_positions(init_positions)
+        poses_mean = np.mean(init_positions, axis=(1, 2))
+        assert np.all(poses_mean != 0)
 
         # initialize gimbal state
         init_positions = jnp.array(init_positions, "float32")
@@ -305,7 +336,6 @@ class GimbalInferencer:
         samples = gimbal.mcmc3d_full.initialize(
             jr.PRNGKey(0), self.params, observations, outlier_prob, init_positions
         )
-        # print(self.params)
 
         ## inference over the entire video
         # average positions over some timeframe
@@ -314,6 +344,7 @@ class GimbalInferencer:
         tot = 0
         log_likelihood_history = []
         difference_from_baseline_history = []
+        nan_likelihoods = 0
         pbar = tqdm(range(self.num_iters_inference), leave=False, desc="inference")
         for itr in pbar:
             random_number = jr.PRNGKey(itr)
@@ -331,9 +362,11 @@ class GimbalInferencer:
                     break
             if np.isnan(log_likelihood):
                 if itr > 5:
-                    print("Loss is NAN")
-                    batch_failed = True
-                    break
+                    nan_likelihoods += 1
+                    if nan_likelihoods > 5:
+                        print("Loss is NAN")
+                        batch_failed = True
+                        break
 
             difference_from_baseline_history.append(difference_from_baseline)
 
@@ -342,16 +375,16 @@ class GimbalInferencer:
                 positions_sum += np.array(samples["positions"])
                 tot += 1
                 positions_mean = positions_sum / tot
+                if self.plot_progress:
+                    fig, axs = plt.subplots(ncols=2, figsize=(10, 3))
+                    axs[0].plot(samples["positions"][:1000, 0, 0])
+                    axs[0].plot(positions_mean[:1000, 0, 0])
+                    axs[0].plot(init_positions[:1000, 0, 0])
 
-                fig, axs = plt.subplots(ncols=2, figsize=(10, 3))
-                axs[0].plot(samples["positions"][:1000, 0, 0])
-                axs[0].plot(positions_mean[:1000, 0, 0])
-                axs[0].plot(init_positions[:1000, 0, 0])
-
-                axs[1].plot(samples["positions"][:100, 0, 0])
-                axs[1].plot(positions_mean[:100, 0, 0])
-                axs[1].plot(init_positions[:100, 0, 0])
-                plt.show()
+                    axs[1].plot(samples["positions"][:100, 0, 0])
+                    axs[1].plot(positions_mean[:100, 0, 0])
+                    axs[1].plot(init_positions[:100, 0, 0])
+                    plt.show()
 
             pbar.set_description(
                 "ll={:.2f}, diff={:.2f}".format(log_likelihood, difference_from_baseline)
@@ -434,6 +467,21 @@ class GimbalInferencer:
             self.predictions_3D_mmap = self.predictions_3D_mmap[:10000]
             self.reprojection_errors_mmap = self.reprojection_errors_mmap[:10000]
 
+    def load_success_file(self):
+
+        success_files = list(self.gimbal_output_directory.glob("gimbal_success.bool.*.mmap"))
+        gimbal_files = list(self.gimbal_output_directory.glob("gimbal.float32.*.mmap"))
+
+        if len(success_files) == 0 | len(gimbal_files) == 0:
+            logger.info("No success file found")
+            self.gimbal_success_loaded = None
+        else:
+            success_file = success_files[0]
+            gimbal_file = gimbal_files[0]
+            self.gimbal_success_loaded = load_memmap_from_filename(success_file)
+            self.gimbal_loaded = load_memmap_from_filename(gimbal_file)
+            logger.info("Loaded success file, Resuming from where it left off")
+
     def load_gimbal_params(self):
         # load params
         self.fitted_params = joblib.load(self.gimbal_params_file)
@@ -451,20 +499,6 @@ class GimbalInferencer:
                 )
             )
             logger.info("Loading new test")
-            # good_params = joblib.load(
-            #    Path(
-            #        "/n/groups/datta/tim_sainburg/projects/24-04-22-neuropixels-recordings/notebooks/keypoints/test_gimbal_params.p"
-            #    )
-            # )
-            # self.fitted_params["obs_inlier_variance"] = good_params["obs_inlier_variance"]
-            # self.fitted_params["radii"] = good_params["radii"]
-            # self.fitted_params["radii_std"] = good_params["radii_std"]
-
-            # self.fitted_params["kappas"] = good_params["kappas"]
-
-            # self.fitted_params["mus"] = good_params["mus"]
-            # self.fitted_params["pis"] = good_params["pis"]
-            # self.fitted_params = good_params
 
     def check_completed(self):
         # check if completed.log exists
