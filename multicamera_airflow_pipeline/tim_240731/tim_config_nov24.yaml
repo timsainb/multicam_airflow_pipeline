@@ -150,6 +150,12 @@ tensorrt_conversion:
 tensorrt_conversion_local:
   conda_env: "/home/peromoseq/anaconda3/envs/mmdeploy"
 
+gimbal_local:
+  conda_env: "/home/peromoseq/anaconda3/envs/keypoint_moseq"
+
+kpms_local:
+  conda_env: "/home/peromoseq/anaconda3/envs/keypoint_moseq"
+
 validation_videos:
   recompute_completed: False
   max_frames: 7200  # 1 min @ 120 fps

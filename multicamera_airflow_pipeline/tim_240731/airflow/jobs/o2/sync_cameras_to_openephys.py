@@ -9,8 +9,9 @@ import textwrap
 import inspect
 import time
 import yaml
-
+import os
 import logging
+import numpy as np
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -37,7 +38,7 @@ def check_ephys_sync_completion(output_directory_ephys_sync, n_expected_streams)
     ephys_streams_found = list(output_directory_ephys_sync.glob("*/ephys_alignment.mmap"))
     n_aligned_ephys_streams = len(ephys_streams_found)
     logger.info(f"Found {n_aligned_ephys_streams} streams")
-    if n_aligned_ephys_streams >= n_expected_streams:
+    if int(n_aligned_ephys_streams) >= int(n_expected_streams):
         logger.info(f"Found the following streams: {n_aligned_ephys_streams}")
         for stream in ephys_streams_found:
             logger.info(stream)
@@ -52,6 +53,22 @@ def sync_cameras_to_openephys(
     output_directory,
     config_file,
 ):
+
+    try:
+        # Check if value is None or NaN
+        if recording_row.ephys_id is None or (
+            isinstance(recording_row.ephys_id, float) and np.isnan(recording_row.ephys_id)
+        ):
+            logger.info("No ephys_id found, skipping spikesorting")
+            return
+        # Convert to string
+        recording_row.ephys_id = str(recording_row.ephys_id)
+    except Exception as e:
+        logger.warning(
+            f"Invalid ephys_id value: {recording_row.ephys_id}, error: {e}, skipping spikesorting"
+        )
+        return
+
     # load config
     config_file = Path(config_file)
     config = yaml.safe_load(open(config_file, "r"))
@@ -73,7 +90,9 @@ def sync_cameras_to_openephys(
     output_directory_ephys_sync = (
         output_directory / "openephys_sync" / recording_row.video_recording_id
     )
+    logger.info(f"Creating output directory: {output_directory_ephys_sync}")
     output_directory_ephys_sync.mkdir(parents=True, exist_ok=True)
+    os.chmod(output_directory_ephys_sync.as_posix(), 0o2775)
     current_datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     remote_job_directory = job_directory / current_datetime_str
 
@@ -130,7 +149,7 @@ def sync_cameras_to_openephys(
     import yaml
     params_file = "{runner.remote_job_directory / f"{runner.job_name}.params.yaml"}"
     config_file = "{config_file.as_posix()}"
-
+    import os; os.umask(0o002)
     params = yaml.safe_load(open(params_file, 'r'))
     config = yaml.safe_load(open(config_file, 'r'))
 

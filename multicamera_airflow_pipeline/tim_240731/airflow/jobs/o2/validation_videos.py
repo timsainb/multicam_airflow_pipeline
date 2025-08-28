@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 import textwrap
 import time
-
+import os
 import yaml
 
 from multicamera_airflow_pipeline.tim_240731.interface.o2 import O2Runner
@@ -46,9 +46,7 @@ def validation_videos(
 
     # Where to save output
     output_directory_val_vids = (
-        output_directory
-        / "keypoint_validation_videos"
-        / recording_row.video_recording_id
+        output_directory / "keypoint_validation_videos" / recording_row.video_recording_id
     )
     output_directory_val_vids.mkdir(parents=True, exist_ok=True)
     current_datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -106,7 +104,7 @@ def validation_videos(
     import yaml
     params_file = "{runner.remote_job_directory / f"{runner.job_name}.params.yaml"}"
     config_file = "{config_file.as_posix()}"
-
+    import os; os.umask(0o002)
     params = yaml.safe_load(open(params_file, 'r'))
     config = yaml.safe_load(open(config_file, 'r'))
 
