@@ -42,7 +42,7 @@ class O2Runner:
         o2_memory="16G",
         o2_time_limit="4:00:00",
         o2_queue="short",
-        modules_to_load=["gcc/9.2.0"],
+        modules_to_load=[],
         o2_exclude=None,  # "compute-g-16-175,compute-g-16-176,compute-g-16-177,compute-g-16-194,compute-g-16-197"
         o2_qos=None,  # "gpuquad_qos"
         o2_gres=None,  # "gpu:1"
@@ -129,7 +129,6 @@ class O2Runner:
         if self.o2_gres is not None:
             slurm_script += f"#SBATCH --gres={self.o2_gres}\n"
         slurm_script += f"# Load the required modules\n"
-        # slurm_script += f"module load gcc/9.2.0\n\n"
         for modules_to_load in self.modules_to_load:
             slurm_script += f"module load {modules_to_load}\n"
         slurm_script += f"source activate {self.conda_env}\n\n"
@@ -175,44 +174,57 @@ class O2Runner:
 
     def create_folder_on_remote(self, remote_path):
         remote_path = Path(remote_path)
-        # using paramiko self.ssh, create the folder on the remote server
         if self.ssh is None:
             raise ConnectionError("SSH connection is not established")
         try:
-            logger.info(f"Creating remote directory: {remote_path.as_posix()}")
+            logger.info(f"Creating world-writable remote directory: {remote_path.as_posix()}")
 
-            # Execute the mkdir command to create the folder on the remote server
-            stdin, stdout, stderr = self.ssh.exec_command(f"mkdir -p {remote_path.as_posix()}")
+            # Compound shell command
+            commands = [
+                f"mkdir -p {remote_path.as_posix()}",
+                f"chmod 0777 {remote_path.as_posix()}",
+            ]
+            full_command = " && ".join(commands)
 
-            # Check if there was any error
+            stdin, stdout, stderr = self.ssh.exec_command(full_command)
+
             error_message = stderr.read().decode().strip()
             if error_message:
-                raise Exception(f"Error creating remote directory: {error_message.as_posix()}")
+                raise Exception(f"Error during remote directory setup: {error_message}")
 
-            logger.info(f"Successfully created remote directory: {remote_path.as_posix()}")
+            logger.info(
+                f"Successfully created and made remote directory world-writable: {remote_path.as_posix()}"
+            )
         except Exception as e:
             logger.error(f"Exception during directory creation: {str(e)}")
             raise
 
     def copy_file_to_remote(self, local_path, remote_path):
+
         local_path = Path(local_path)
         remote_path = Path(remote_path)
         if self.ssh is None:
             raise ConnectionError("SSH connection is not established")
 
         try:
-            # Create an SFTP session from the SSH connection
+            # Create an SFTP session
             sftp = self.ssh.open_sftp()
 
             logger.info(f"Transferring {local_path} to {self.o2_server}:{remote_path.as_posix()}")
             sftp.put(local_path.as_posix(), remote_path.as_posix())
-
-            logger.info(
-                f"Successfully transferred {local_path.as_posix()} to {remote_path.as_posix()}"
-            )
-
-            # Close the SFTP session
             sftp.close()
+
+            logger.info(f"Successfully transferred {local_path} to {remote_path}")
+
+            # Set permissions to 0777 (read-write-execute for all)
+            chmod_command = f"chmod 0777 {remote_path.as_posix()}"
+            stdin, stdout, stderr = self.ssh.exec_command(chmod_command)
+            error_message = stderr.read().decode().strip()
+            if error_message:
+                raise Exception(f"Error setting file permissions: {error_message}")
+
+            logger.info(f"Set permissions to 0666 for {remote_path.as_posix()}")
+
         except Exception as e:
             logger.error(f"Exception during file transfer: {str(e)}")
             raise

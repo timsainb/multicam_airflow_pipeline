@@ -144,7 +144,7 @@ def predict_2d_local(
         import yaml
         params_file = "{runner.job_directory / f"{runner.job_name}.params.yaml"}"
         config_file = "{config_file.as_posix()}"
-
+        import os; os.umask(0o002)
         params = yaml.safe_load(open(params_file, 'r'))
         config = yaml.safe_load(open(config_file, 'r'))
         

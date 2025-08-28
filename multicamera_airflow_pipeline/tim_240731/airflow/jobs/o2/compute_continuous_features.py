@@ -9,7 +9,7 @@ import textwrap
 import inspect
 import time
 import yaml
-
+import os
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
@@ -53,7 +53,10 @@ def compute_continuous_features(
     continuous_features_output_directory = (
         output_directory / "continuous_features" / recording_row.video_recording_id
     )
+    #    create output directory
+    logger.info(f"Creating output directory: {continuous_features_output_directory}")
     continuous_features_output_directory.mkdir(parents=True, exist_ok=True)
+    os.chmod(continuous_features_output_directory.as_posix(), 0o2775)
     current_datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     remote_job_directory = job_directory / current_datetime_str
 
@@ -115,7 +118,7 @@ def compute_continuous_features(
     import yaml
     params_file = "{runner.remote_job_directory / f"{runner.job_name}.params.yaml"}"
     config_file = "{config_file.as_posix()}"
-
+    import os; os.umask(0o002)
     params = yaml.safe_load(open(params_file, 'r'))
     config = yaml.safe_load(open(config_file, 'r'))
 

@@ -26,6 +26,12 @@ from multicamera_airflow_pipeline.tim_240731.airflow.jobs.o2 import (
 from multicamera_airflow_pipeline.tim_240731.airflow.jobs.local.predict_2d_local import (
     predict_2d_local,
 )
+from multicamera_airflow_pipeline.tim_240731.airflow.jobs.local.run_gimbal_local import (
+    run_gimbal_local,
+)
+from multicamera_airflow_pipeline.tim_240731.airflow.jobs.local.kpms_inference_local import (
+    run_kpms_local,
+)
 
 from multicamera_airflow_pipeline.tim_240731.airflow.jobs import await_2d_predictions
 
@@ -60,6 +66,8 @@ await_2d_predictions_task = task(
 )
 kpms_task = task(kpms_inference.run_kpms, pool="low_compute_pool")
 predict_2d_local_task = task(predict_2d_local, pool="local_gpu_pool")
+run_gimbal_local_task = task(run_gimbal_local, pool="local_gpu_pool")
+run_kpms_local_task = task(run_kpms_local, pool="local_gpu_pool")
 validation_videos_task = task(validation_videos.validation_videos, pool="low_compute_pool")
 
 
@@ -138,7 +146,7 @@ class AirflowDAG:
                     self.output_directory,
                     self.config_file,
                 )
-                if np.isin(recording_row["use_local"], ["TRUE", True]):
+                if recording_row["use_local"] == True:
 
                     predicted_2d = predict_2d_local_task(
                         recording_row,
@@ -186,12 +194,20 @@ class AirflowDAG:
                     self.output_directory,
                     self.config_file,
                 )
-                gimbaled = run_gimbal_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
+                if recording_row["use_local"] == True:
+                    gimbaled = run_gimbal_local_task(
+                        recording_row,
+                        self.job_directory,
+                        self.output_directory,
+                        self.config_file,
+                    )
+                else:
+                    gimbaled = run_gimbal_task(
+                        recording_row,
+                        self.job_directory,
+                        self.output_directory,
+                        self.config_file,
+                    )
                 size_normed = size_normalization_task(
                     recording_row,
                     self.job_directory,
@@ -210,13 +226,21 @@ class AirflowDAG:
                     self.output_directory,
                     self.config_file,
                 )
+                if recording_row["use_local"] == True:
+                    moseqd = run_kpms_local_task(
+                        recording_row,
+                        self.job_directory,
+                        self.output_directory,
+                        self.config_file,
+                    )
 
-                moseqd = kpms_task(
-                    recording_row,
-                    self.job_directory,
-                    self.output_directory,
-                    self.config_file,
-                )
+                else:
+                    moseqd = kpms_task(
+                        recording_row,
+                        self.job_directory,
+                        self.output_directory,
+                        self.config_file,
+                    )
 
                 # cont_feats = compute_continuous_features_task(
                 #    recording_row,

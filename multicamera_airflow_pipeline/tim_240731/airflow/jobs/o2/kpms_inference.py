@@ -9,7 +9,7 @@ import textwrap
 import inspect
 import time
 import yaml
-
+import os
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
@@ -52,7 +52,9 @@ def run_kpms(
         / config["kpms"]["syllable_id"]
         / recording_row.video_recording_id
     )
+    logger.info(f"Creating output directory: {kpms_output_directory}")
     kpms_output_directory.mkdir(parents=True, exist_ok=True)
+    os.chmod(kpms_output_directory.as_posix(), 0o2775)
     current_datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     remote_job_directory = job_directory / current_datetime_str
 
@@ -98,7 +100,7 @@ def run_kpms(
         o2_exclude=config["o2"]["kpms"]["o2_exclude"],
         o2_qos=config["o2"]["kpms"]["o2_qos"],
         o2_gres=config["o2"]["kpms"]["o2_gres"],
-        modules_to_load=["gcc/9.2.0", "cuda/12.1"],
+        # modules_to_load=["gcc/9.2.0", "cuda/12.1"],
     )
 
     runner.python_script = textwrap.dedent(
@@ -107,7 +109,7 @@ def run_kpms(
     import yaml
     params_file = "{runner.remote_job_directory / f"{runner.job_name}.params.yaml"}"
     config_file = "{config_file.as_posix()}"
-
+    import os; os.umask(0o002)
     params = yaml.safe_load(open(params_file, 'r'))
     config = yaml.safe_load(open(config_file, 'r'))
 

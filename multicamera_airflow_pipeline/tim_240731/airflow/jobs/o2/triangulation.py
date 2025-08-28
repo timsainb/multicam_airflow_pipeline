@@ -9,7 +9,7 @@ import textwrap
 import inspect
 import time
 import yaml
-
+import os
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
@@ -53,7 +53,9 @@ def triangulation(
     output_directory_triangulation = (
         output_directory / "triangulation" / recording_row.video_recording_id
     )
+    logger.info(f"Creating output directory: {output_directory_triangulation}")
     output_directory_triangulation.mkdir(parents=True, exist_ok=True)
+    os.chmod(output_directory_triangulation.as_posix(), 0o2775)
     current_datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     remote_job_directory = job_directory / current_datetime_str
 
@@ -121,7 +123,7 @@ def triangulation(
     import yaml
     params_file = "{runner.remote_job_directory / f"{runner.job_name}.params.yaml"}"
     config_file = "{config_file.as_posix()}"
-
+    import os; os.umask(0o002)
     params = yaml.safe_load(open(params_file, 'r'))
     config = yaml.safe_load(open(config_file, 'r'))
 

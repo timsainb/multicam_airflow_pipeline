@@ -9,7 +9,7 @@ import textwrap
 import inspect
 import time
 import yaml
-
+import os
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
@@ -56,7 +56,9 @@ def predict_2d(
     output_directory_predictions = (
         output_directory / "2D_predictions" / recording_row.video_recording_id
     )
+    logger.info(f"Creating output directory: {output_directory_predictions}")
     output_directory_predictions.mkdir(parents=True, exist_ok=True)
+    os.chmod(output_directory_predictions.as_posix(), 0o2775)
     current_datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     remote_job_directory = job_directory / current_datetime_str
 
@@ -102,7 +104,8 @@ def predict_2d(
         o2_exclude=config["o2"]["prediction_2d"]["o2_exclude"],
         o2_qos=config["o2"]["prediction_2d"]["o2_qos"],
         o2_gres=config["o2"]["prediction_2d"]["o2_gres"],
-        modules_to_load=["gcc/9.2.0", "cuda/11.7"],
+        modules_to_load=[],
+        # modules_to_load=["gcc/9.2.0", "cuda/11.7"],
     )
 
     if config["prediction_2d"]["use_tensorrt"]:
@@ -115,7 +118,7 @@ def predict_2d(
 
         params = yaml.safe_load(open(params_file, 'r'))
         config = yaml.safe_load(open(config_file, 'r'))
-
+        import os; os.umask(0o002)
         # covert models to tensorrt
         from multicamera_airflow_pipeline.tim_240731.keypoints.tensorrt import RTMModelConverter
         model_converter = RTMModelConverter(
@@ -143,7 +146,7 @@ def predict_2d(
         import yaml
         params_file = "{runner.remote_job_directory / f"{runner.job_name}.params.yaml"}"
         config_file = "{config_file.as_posix()}"
-
+        import os; os.umask(0o002)
         params = yaml.safe_load(open(params_file, 'r'))
         config = yaml.safe_load(open(config_file, 'r'))
 

@@ -230,6 +230,8 @@ class KeypointVideoCreator:
                     "keypoint_coords": these_coords_2D,
                     "keypoint_conf": these_confs,
                 }
+        else:
+            self.predictions_gimbal = None
 
     def create_2D_keypoint_conf_plots(self):
         # import pdb; pdb.set_trace()

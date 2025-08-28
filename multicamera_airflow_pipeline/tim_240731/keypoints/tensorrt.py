@@ -189,8 +189,6 @@ class RTMModelConverter:
             model_conversion_script += "source $(conda info --base)/etc/profile.d/conda.sh;\n"
             model_conversion_script += f"conda activate {self.conda_env};\n"
         else:
-            model_conversion_script += f"module load gcc/9.2.0\n"
-            model_conversion_script += f"module load cuda/11.7\n"
             model_conversion_script += f"source activate {self.conda_env};\n"
         # # Set PYTHONPATH to include the directory where sitecustomize.py is located
         model_conversion_script += f"export PYTHONPATH={temp_dir}:$PYTHONPATH;\n"

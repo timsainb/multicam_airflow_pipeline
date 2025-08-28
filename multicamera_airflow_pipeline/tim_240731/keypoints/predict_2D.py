@@ -16,6 +16,7 @@ import multiprocessing
 import traceback
 import textwrap
 import subprocess
+import os
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -192,6 +193,7 @@ class Inferencer2D:
                     python_script = textwrap.dedent(
                         f"""
                     import sys
+                    import os; os.umask(0o002)
                     # print python executable
                     print(sys.executable)
                     from multicamera_airflow_pipeline.tim_240731.keypoints.predict_2D import predict_video
@@ -215,10 +217,8 @@ class Inferencer2D:
                     )
                     # print(sys.executable)
                     # Run the process and capture the output
-                    if self.is_local:
-                        command = f"{sys.executable} -c '{python_script}'"
-                    else:
-                        command = f"module load cuda/11.7 && {sys.executable} -c '{python_script}'"
+                    command = f"{sys.executable} -c '{python_script}'"
+
                     process = subprocess.Popen(
                         # ["python", "-c", python_script],
                         # [sys.executable, "-c", python_script],
@@ -523,6 +523,9 @@ def predict_video(
         if use_motpy:
             h5f["detection_changes"] = detection_changes[: (frame_id + 1)]
             h5f["missing_detections"] = missing_detections[: (frame_id + 1)]
+
+    # make the file readable with permissions 644
+    os.chmod(output_h5_file, 0o644)
 
 
 def update_log_file_signal_handler(log_file):

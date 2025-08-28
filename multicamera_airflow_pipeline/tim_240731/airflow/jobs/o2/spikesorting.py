@@ -9,8 +9,9 @@ import textwrap
 import inspect
 import time
 import yaml
-
+import os
 import logging
+import numpy as np
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -31,7 +32,11 @@ def convert_minutes_to_hms(minutes_float):
 
 def check_spikesorting_completion(spikesorting_output_directory, n_ephys_streams_expected):
     n_sorts_found = len(list(spikesorting_output_directory.glob("*/sort_result")))
-    if n_sorts_found >= n_ephys_streams_expected:
+    logger.info(f"Found {n_sorts_found} spikesorting results in {spikesorting_output_directory}")
+    if n_sorts_found == 0:
+        logger.info("No spikesorting results found, returning False")
+        return False
+    if int(n_sorts_found) >= int(n_ephys_streams_expected):
         return True
     else:
         return False
@@ -43,6 +48,23 @@ def spikesorting(
     output_directory,
     config_file,
 ):
+    logger.info(f"Ephys ID: {recording_row.ephys_id}, {type(recording_row.ephys_id)}")
+    try:
+        # Check if value is None or NaN
+        if recording_row.ephys_id is None or (
+            isinstance(recording_row.ephys_id, float) and np.isnan(recording_row.ephys_id)
+        ):
+            logger.info("No ephys_id found, skipping spikesorting")
+            return
+        # Convert to string
+        recording_row.ephys_id = str(recording_row.ephys_id)
+    except Exception as e:
+        logger.warning(
+            f"Invalid ephys_id value: {recording_row.ephys_id}, error: {e}, skipping spikesorting"
+        )
+        return
+    logger.info(f"Starting spikesorting {recording_row.ephys_id} ({type(recording_row.ephys_id)})")
+
     n_ephys_streams_expected = recording_row.n_ephys_streams
 
     # load config
@@ -58,7 +80,9 @@ def spikesorting(
     spikesorting_output_directory = (
         output_directory / "spikesorting" / recording_row.video_recording_id
     )
+    logger.info(f"Creating output directory: {spikesorting_output_directory}")
     spikesorting_output_directory.mkdir(parents=True, exist_ok=True)
+    os.chmod(spikesorting_output_directory.as_posix(), 0o2775)
     current_datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     remote_job_directory = job_directory / current_datetime_str
 
@@ -107,7 +131,7 @@ def spikesorting(
     import yaml
     params_file = "{runner.remote_job_directory / f"{runner.job_name}.params.yaml"}"
     config_file = "{config_file.as_posix()}"
-
+    import os; os.umask(0o002)
     params = yaml.safe_load(open(params_file, 'r'))
     config = yaml.safe_load(open(config_file, 'r'))
 

@@ -9,7 +9,7 @@ import textwrap
 import inspect
 import time
 import yaml
-
+import os
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
@@ -56,8 +56,12 @@ def egocentric_alignment(
     egocentric_alignment_output_directory_nonrigid = (
         egocentric_alignment_output_directory / "nonrigid"
     )
+    logger.info(f"Creating output directory: {egocentric_alignment_output_directory_rigid}")
     egocentric_alignment_output_directory_rigid.mkdir(parents=True, exist_ok=True)
+    os.chmod(egocentric_alignment_output_directory_rigid.as_posix(), 0o2775)
+    logger.info(f"Creating output directory: {egocentric_alignment_output_directory_nonrigid}")
     egocentric_alignment_output_directory_nonrigid.mkdir(parents=True, exist_ok=True)
+    os.chmod(egocentric_alignment_output_directory_nonrigid.as_posix(), 0o2775)
     current_datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     remote_job_directory = job_directory / current_datetime_str
 
@@ -128,7 +132,7 @@ def egocentric_alignment(
 
     params = yaml.safe_load(open(params_file, 'r'))
     config = yaml.safe_load(open(config_file, 'r'))
-
+    import os; os.umask(0o002)
     # grab sync cameras function
     from multicamera_airflow_pipeline.tim_240731.keypoints.alignment.egocentric_alignment import EgocentricAligner 
     # run rigid alignment

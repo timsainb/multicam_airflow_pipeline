@@ -9,8 +9,10 @@ import textwrap
 import inspect
 import time
 import yaml
-
+import os
 import logging
+import grp
+import os
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -62,7 +64,10 @@ def sync_cameras(
         else:
             logger.info("Camera sync not completed, running")
 
+    # create output directory
+    logger.info(f"Creating output directory: {output_directory_camera_sync}")
     output_directory_camera_sync.mkdir(parents=True, exist_ok=True)
+    os.chmod(output_directory_camera_sync.as_posix(), 0o2775)
     current_datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     remote_job_directory = job_directory / current_datetime_str
 
@@ -103,7 +108,7 @@ def sync_cameras(
     import yaml
     params_file = "{runner.remote_job_directory / f"{runner.job_name}.params.yaml"}"
     config_file = "{config_file.as_posix()}"
-
+    import os; os.umask(0o002)
     params = yaml.safe_load(open(params_file, 'r'))
     config = yaml.safe_load(open(config_file, 'r'))
         
